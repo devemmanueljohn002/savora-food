@@ -1,0 +1,1 @@
+import PageShell from "@/components/PageShell"; import Marketplace from "@/components/Marketplace"; import {snacks} from "@/lib/data"; export default function Page(){return <PageShell><Marketplace title="Snacks" description="Small chops, meat pies, puff puff, chin chin and pastries — party ready." items={snacks}/></PageShell>}

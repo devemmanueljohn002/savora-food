@@ -1,0 +1,2 @@
+import Link from "next/link"; import {Item} from "@/lib/data";
+export default function ProductCard({item}:{item:Item}){const body=<><img src={item.image} alt={item.name}/><div className="card-body"><div className="row"><strong>{item.name}</strong><span className="rating">★ {item.rating}</span></div><p className="muted">{item.vendor}</p><div className="row"><span className="price">{item.price}</span><button className="btn">＋ Add</button></div></div></>;return item.slug?<Link className="card" href={"/product/"+item.slug}>{body}</Link>:<div className="card">{body}</div>}

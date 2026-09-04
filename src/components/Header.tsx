@@ -1,0 +1,3 @@
+import Link from "next/link";
+const links=[["Home","/"],["Food","/food"],["Cakes","/cakes"],["Snacks","/snacks"],["Drinks","/food"],["Catering","/catering"],["Vendors","/vendors"],["About","/about"],["Contact","/contact"]];
+export default function Header(){return <header className="header"><div className="topbar"><Link className="brand" href="/">Savora Food <span className="tagline">— Your Food. Your Choice. Delivered.</span></Link><input className="search" placeholder="⌕  Search meals, cakes, vendors..."/><div className="spacer"/><div className="icons"><Link href="/dashboard">♡</Link><Link href="/cart">🛒</Link><Link className="btn" href="/auth">♙ Login</Link></div></div><nav className="nav">{links.map(([n,h])=><Link key={n} href={h}>{n}</Link>)}</nav></header>}

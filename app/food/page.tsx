@@ -1,0 +1,1 @@
+import PageShell from "@/components/PageShell"; import Marketplace from "@/components/Marketplace"; import {food} from "@/lib/data"; export default function Page(){return <PageShell><Marketplace title="Food Marketplace" description="Hot, freshly cooked meals from restaurants and home kitchens across Nigeria." items={food}/></PageShell>}
