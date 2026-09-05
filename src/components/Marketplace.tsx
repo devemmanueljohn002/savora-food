@@ -1,2 +1,61 @@
-import ProductCard from "./ProductCard"; import {Item} from "@/lib/data";
-export default function Marketplace({title,description,items}:{title:string,description:string,items:Item[]}){return <><section className="page-hero"><div className="container"><h1>{title}</h1><p>{description}</p><span className="pill">{items.length} products available</span></div></section><section className="section container split"><aside className="filters"><label>Search in {title}</label><input placeholder="Search products"/><label>Product type</label>{["Popular","Rice Dishes","Small Chops","Celebration","Custom"].map(x=><p key={x}>◯ {x}</p>)}<label>Vendor</label><p>◯ Mama Tolu's Kitchen</p><p>◯ Sweet Crumbs Bakery</p><label>Minimum rating</label><select><option>Any rating</option></select></aside><div><p className="muted">{items.length} results</p><div className="grid">{items.map((x,i)=><ProductCard key={i} item={x}/>)}</div></div></section></>}
+import ProductCard from "@/components/ProductCard";
+
+type MarketplaceProps = {
+  title: string;
+  description: string;
+  items: Array<{
+    id?: string;
+    name: string;
+    vendor?: string;
+    category?: string;
+    price: number;
+    oldPrice?: number;
+    rating?: number;
+    image: string;
+    description?: string;
+    location?: string;
+  }>;
+};
+
+export default function Marketplace({ title, description, items }: MarketplaceProps) {
+  return (
+    <>
+      <section className="page-hero">
+        <div className="container">
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
+      </section>
+
+      <section className="section container">
+        <div className="row" style={{ gap: 12, marginBottom: 20 }}>
+          <input className="search" placeholder="Search vendors" style={{ width: "100%" }} />
+          <select className="search" style={{ width: 180 }}>
+            <option>All cities</option>
+            <option>Lagos</option>
+            <option>Abuja</option>
+            <option>Ibadan</option>
+          </select>
+          <select className="search" style={{ width: 190 }}>
+            <option>All categories</option>
+            <option>Food</option>
+            <option>Cakes</option>
+            <option>Snacks</option>
+            <option>Drinks</option>
+          </select>
+          <select className="search" style={{ width: 180 }}>
+            <option>Highest rated</option>
+            <option>Most popular</option>
+            <option>Lowest price</option>
+          </select>
+        </div>
+
+        <div className="grid">
+          {items.map((item, index) => (
+            <ProductCard key={`${item.name}-${index}`} item={item} />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}

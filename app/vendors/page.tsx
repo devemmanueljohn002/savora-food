@@ -1,3 +1,64 @@
-import PageShell from "@/components/PageShell"; import {images} from "@/lib/data";
-const vendors=[["Sweet Crumbs Bakery","Custom cakes for every celebration",images.cake,"4.9"],["Royal Plates Catering","Premium event catering",images.catering,"4.9"],["Mama Tolu's Kitchen","Home-style Nigerian classics",images.food,"4.8"],["Chops Republic","Small chops done right",images.snack,"4.7"],["Zobo Lab","Cold-pressed natural drinks",images.drink,"4.6"],["The Suya Spot","Charcoal-grilled suya & sides",images.food,"4.5"]];
-export default function Page(){return <PageShell><section className="page-hero"><div className="container"><h1>Vendors on Savora Food</h1><p>Restaurants, home kitchens, bakers, snack makers, drink brands and caterers — all verified before they go live.</p></div></section><section className="section container"><div className="grid">{vendors.map(v=><div className="card" key={v[0]}><img src={v[2]} alt={v[0]}/><div className="card-body"><div className="row"><strong>{v[0]} ✓</strong><span className="rating">★ {v[3]}</span></div><p className="muted">{v[1]}</p><button className="btn secondary" style={{width:"100%"}}>View Vendor</button></div></div>)}</div></section></PageShell>}
+import PageShell from "@/components/PageShell";
+import Link from "next/link";
+import { vendors } from "@/lib/data";
+import { getVendors } from "@/lib/savora-api";
+
+export default async function Page() {
+  const liveVendors = await getVendors();
+
+  return (
+    <PageShell>
+      <section className="section container">
+        <h1 style={{ margin: 0, fontSize: 52, lineHeight: 1.1 }}>Vendors on Savora Food</h1>
+        <p className="section-sub" style={{ marginTop: 10 }}>
+          Restaurants, home kitchens, bakers, snack makers, drink brands and caterers — all verified before they go live.
+        </p>
+
+        <div className="row" style={{ gap: 12, marginBottom: 20 }}>
+          <input className="search" placeholder="Search vendors" style={{ width: "100%" }} />
+          <select className="search" style={{ width: 180 }}>
+            <option>All cities</option>
+            <option>Lagos</option>
+            <option>Abuja</option>
+            <option>Ibadan</option>
+          </select>
+          <select className="search" style={{ width: 190 }}>
+            <option>All categories</option>
+            <option>Food</option>
+            <option>Cakes</option>
+            <option>Snacks</option>
+            <option>Drinks</option>
+          </select>
+          <select className="search" style={{ width: 180 }}>
+            <option>Highest rated</option>
+            <option>Most popular</option>
+            <option>Lowest price</option>
+          </select>
+        </div>
+
+        <div className="grid">
+          {(liveVendors.length ? liveVendors : vendors).map((vendor) => (
+            <article className="card" key={vendor.id}>
+              <img src={vendor.image} alt={vendor.name} style={{ height: 230, objectFit: "cover" }} />
+              <div className="card-body">
+                <div className="row" style={{ alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <strong>{vendor.name}</strong>
+                    <p className="muted" style={{ margin: "6px 0 0" }}>{vendor.tagline}</p>
+                  </div>
+                  <span className="rating">★ {vendor.rating}</span>
+                </div>
+                <div className="row" style={{ marginTop: 12 }}>
+                  <span className="pill" style={{ background: "#f9ebd3", color: "#5b3d13" }}>{vendor.category}</span>
+                  <span className="muted">{vendor.verified ? "Verified" : "New"}</span>
+                </div>
+                <div className="muted" style={{ marginTop: 12 }}>{vendor.location}, {vendor.city}</div>
+                <Link className="btn secondary" href={`/vendor/${vendor.id}`} style={{ width: "100%", marginTop: 18, textAlign: "center" }}>View Vendor</Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </PageShell>
+  );
+}
