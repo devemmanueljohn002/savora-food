@@ -1,64 +1,85 @@
 import PageShell from "@/components/PageShell";
-import Link from "next/link";
-import { vendors } from "@/lib/data";
-import { getVendors } from "@/lib/savora-api";
+import VendorCard from "@/components/VendorCard";
+import CatalogFilters from "@/components/CatalogFilters";
+import { listLocations, listVendorCategories, listVendorCities, listVendors } from "@/server/queries/catalog";
+import { parseFilters, type RawSearchParams } from "@/lib/catalog-params";
+import type { VendorSort } from "@/lib/catalog-types";
 
-export default async function Page() {
-  const liveVendors = await getVendors();
+const VENDOR_SORTS = [
+  { value: "", label: "Recommended" },
+  { value: "rating", label: "Highest rated" },
+  { value: "popular", label: "Most popular" },
+  { value: "name", label: "A → Z" },
+];
+
+export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
+  const { q, city, category, sort, page } = parseFilters(await searchParams);
+  const [result, cities, categories, locations] = await Promise.all([
+    listVendors({ search: q, city, category, sort: sort as VendorSort | undefined, page, limit: 12 }),
+    listVendorCities(),
+    listVendorCategories(),
+    listLocations(),
+  ]);
+
+  const deliveryByCity = new Map<string, { fee: number; minutes: number }>();
+  for (const location of locations) {
+    if (location.city && !deliveryByCity.has(location.city.toLowerCase())) {
+      deliveryByCity.set(location.city.toLowerCase(), {
+        fee: location.deliveryFee,
+        minutes: location.deliveryTimeMinutes,
+      });
+    }
+  }
+  const fallbackDelivery = locations[0]
+    ? { fee: locations[0].deliveryFee, minutes: locations[0].deliveryTimeMinutes }
+    : { fee: 0, minutes: 40 };
 
   return (
     <PageShell>
-      <section className="section container">
-        <h1 style={{ margin: 0, fontSize: 52, lineHeight: 1.1 }}>Vendors on Savora Food</h1>
-        <p className="section-sub" style={{ marginTop: 10 }}>
-          Restaurants, home kitchens, bakers, snack makers, drink brands and caterers — all verified before they go live.
-        </p>
-
-        <div className="row" style={{ gap: 12, marginBottom: 20 }}>
-          <input className="search" placeholder="Search vendors" style={{ width: "100%" }} />
-          <select className="search" style={{ width: 180 }}>
-            <option>All cities</option>
-            <option>Lagos</option>
-            <option>Abuja</option>
-            <option>Ibadan</option>
-          </select>
-          <select className="search" style={{ width: 190 }}>
-            <option>All categories</option>
-            <option>Food</option>
-            <option>Cakes</option>
-            <option>Snacks</option>
-            <option>Drinks</option>
-          </select>
-          <select className="search" style={{ width: 180 }}>
-            <option>Highest rated</option>
-            <option>Most popular</option>
-            <option>Lowest price</option>
-          </select>
-        </div>
-
-        <div className="grid">
-          {(liveVendors.length ? liveVendors : vendors).map((vendor) => (
-            <article className="card" key={vendor.id}>
-              <img src={vendor.image} alt={vendor.name} style={{ height: 230, objectFit: "cover" }} />
-              <div className="card-body">
-                <div className="row" style={{ alignItems: "flex-start" }}>
-                  <div style={{ flex: 1 }}>
-                    <strong>{vendor.name}</strong>
-                    <p className="muted" style={{ margin: "6px 0 0" }}>{vendor.tagline}</p>
-                  </div>
-                  <span className="rating">★ {vendor.rating}</span>
-                </div>
-                <div className="row" style={{ marginTop: 12 }}>
-                  <span className="pill" style={{ background: "#f9ebd3", color: "#5b3d13" }}>{vendor.category}</span>
-                  <span className="muted">{vendor.verified ? "Verified" : "New"}</span>
-                </div>
-                <div className="muted" style={{ marginTop: 12 }}>{vendor.location}, {vendor.city}</div>
-                <Link className="btn secondary" href={`/vendor/${vendor.id}`} style={{ width: "100%", marginTop: 18, textAlign: "center" }}>View Vendor</Link>
-              </div>
-            </article>
-          ))}
+      <section className="vendors-hero">
+        <div className="vendors-wrap">
+          <h1>Vendors on Savora Food</h1>
+          <p>Restaurants, home kitchens, bakers, snack makers, drink brands and caterers - all verified before they go live.</p>
         </div>
       </section>
+
+      <div className="vendors-wrap vfilt-wrap">
+        <CatalogFilters
+          basePath="/vendors"
+          cities={cities}
+          categories={categories.map((option) => ({ value: option.slug, label: option.name }))}
+          current={{ q, city, category, sort }}
+          sortOptions={VENDOR_SORTS}
+          searchPlaceholder="Search vendors"
+        />
+      </div>
+
+      <div className="vendors-wrap">
+        {result.items.length === 0 ? (
+          <div className="card card-body">
+            <h2>No vendors found</h2>
+            <p className="muted">Try another search term, city or category.</p>
+          </div>
+        ) : (
+          <div className="vendors-grid">
+            {result.items.map((vendor) => (
+              <VendorCard
+                key={vendor.id}
+                vendor={vendor}
+                delivery={
+                  deliveryByCity.get((vendor.city ?? "").toLowerCase()) ?? fallbackDelivery
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {result.totalPages > 1 ? (
+          <p className="muted" style={{ marginTop: 24, textAlign: "center" }}>
+            Page {result.page} of {result.totalPages} · {result.total} vendors
+          </p>
+        ) : null}
+      </div>
     </PageShell>
   );
 }

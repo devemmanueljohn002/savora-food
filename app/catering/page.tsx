@@ -1,3 +1,24 @@
 import PageShell from "@/components/PageShell";
-const packs=[["Royal Wedding Buffet","A full wedding spread with live stations, servers and complete setup end-to-end.","₦12,500"],["Corporate Lunch Service","Individually packaged lunches delivered on schedule for meetings and conferences.","₦7,500"],["Birthday Party Pack","Everything a house party needs, delivered hot with friendly service.","₦5,500"],["Home-Style Event Trays","Traditional Nigerian dishes prepared in large trays for easy gatherings.","₦6,200"]];
-export default function Page(){return <PageShell><section className="banner"><div className="container"><span className="pill">Catering Marketplace</span><h1>Catering for weddings, corporate events and everything in between</h1><p>Pick a package, share your event details and get a quote from a verified Savora Food caterer.</p></div></section><section className="section container two-col"><div><h2>Catering packages</h2><div className="grid" style={{gridTemplateColumns:"repeat(2,1fr)"}}>{packs.map(p=><div className="feature-box" key={p[0]}><strong>{p[0]}</strong><p className="muted">Royal Plates Catering</p><p className="muted">{p[1]}</p><span className="price">{p[2]}</span> <span className="muted">per guest</span><p>◉ 3 rice options<br/>◉ Drinks & dessert<br/>◉ Professional service</p><span className="pill">Wedding</span></div>)}</div></div><form className="form-card"><h2>Request a quote</h2><p className="muted">Royal Wedding Buffet · Royal Plates Catering</p>{["Full name","Phone number","Email","Event type","Event date","Event location","Number of guests"].map((x,i)=><div key={x}><label>{x}</label>{x==="Event type"?<select><option>Wedding</option><option>Birthday</option><option>Corporate Event</option></select>:<input placeholder={i===1?"0803 000 0000":i===6?"50":""}/>}</div>)}<label>Special requirements</label><textarea placeholder="Dietary needs, serving style, setup time..."/><div className="feature-box"><div className="row"><span>♧ 50 guests</span><strong className="price">₦625,000</strong></div><p className="muted">Indicative estimate. The caterer confirms the final quote before payment.</p></div><button className="btn" style={{width:"100%",marginTop:14}}>Submit booking request</button></form></section></PageShell>}
+import CateringMarketplace from "@/components/CateringMarketplace";
+import { listCateringPackages } from "@/server/queries/catalog";
+import heroImage from "@/assets/cat-catering.jpg";
+
+export default async function Page() {
+  const packages = await listCateringPackages(48);
+
+  return (
+    <PageShell>
+      <section className="cat-hero">
+        <img className="cat-hero-img" src={heroImage.src} alt="Catering buffet setup" />
+        <div className="cat-hero-shade" aria-hidden="true" />
+        <div className="cat-hero-body">
+          <span className="cat-hero-badge">Catering Marketplace</span>
+          <h1>Catering for weddings, corporate events and everything in between</h1>
+          <p>Pick a package, share your event details and get a quote from a verified Savora Food caterer.</p>
+        </div>
+      </section>
+
+      <CateringMarketplace packages={packages} />
+    </PageShell>
+  );
+}
