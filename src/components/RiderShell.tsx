@@ -77,7 +77,7 @@ export function RiderSignIn() {
       <section className="section container">
         <h1>Rider dashboard</h1>
         <p className="muted">Please sign in with your rider account.</p>
-        <Link className="btn" href="/login?next=/rider/dashboard">Sign in</Link>
+        <Link className="btn" href="/auth?next=/rider/dashboard">Sign in</Link>
       </section>
     </PageShell>
   );

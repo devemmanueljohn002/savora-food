@@ -64,8 +64,8 @@ export default function ForgotPasswordPage() {
           )}
 
           <div className="auth-links">
-            <Link href="/login">Back to sign in</Link>
-            <Link href="/register">Create an account</Link>
+            <Link href="/auth">Back to sign in</Link>
+            <Link href="/auth?tab=up">Create an account</Link>
           </div>
         </div>
 

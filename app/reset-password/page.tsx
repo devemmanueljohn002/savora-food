@@ -47,7 +47,7 @@ function ResetForm() {
           </p>
         ) : done ? (
           <p className="auth-success" role="status">
-            Password updated. <Link href="/login">Sign in with your new password</Link>.
+            Password updated. <Link href="/auth">Sign in with your new password</Link>.
           </p>
         ) : (
           <form className="auth-form" onSubmit={submit}>
@@ -87,7 +87,7 @@ function ResetForm() {
         )}
 
         <div className="auth-links">
-          <Link href="/login">Back to sign in</Link>
+          <Link href="/auth">Back to sign in</Link>
         </div>
       </div>
 

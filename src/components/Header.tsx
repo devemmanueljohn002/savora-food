@@ -155,7 +155,7 @@ export default function Header() {
               <LayoutDashboard className="hdr-ico" aria-hidden="true" /> {firstName}
             </Link>
           ) : (
-            <Link className="hdr-login" href="/login">
+            <Link className="hdr-login" href="/auth">
               <User className="hdr-ico" aria-hidden="true" /> Login
             </Link>
           )}

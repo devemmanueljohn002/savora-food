@@ -56,7 +56,7 @@ function SignInPrompt() {
       <section className="section container">
         <h1>Your dashboard</h1>
         <p className="muted">Please sign in to view your orders, bookings and favorites.</p>
-        <Link className="btn" href="/login?next=/dashboard">
+        <Link className="btn" href="/auth?next=/dashboard">
           <LogIn size={16} aria-hidden="true" /> Sign in
         </Link>
       </section>

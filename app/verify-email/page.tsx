@@ -63,7 +63,7 @@ function VerifyPanel() {
         {status === "working" && <p className="muted">Confirming your email…</p>}
         {status === "done" && (
           <p className="auth-success" role="status">
-            {message} <Link href="/login">Sign in to continue</Link>.
+            {message}           <Link href="/auth">Sign in to continue</Link>.
           </p>
         )}
         {status === "error" && (
@@ -99,8 +99,8 @@ function VerifyPanel() {
         </form>
 
         <div className="auth-links">
-          <Link href="/login">Back to sign in</Link>
-          <Link href="/register">Create an account</Link>
+          <Link href="/auth">Back to sign in</Link>
+          <Link href="/auth?tab=up">Create an account</Link>
         </div>
       </div>
 

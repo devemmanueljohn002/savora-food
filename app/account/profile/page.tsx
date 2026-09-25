@@ -53,7 +53,7 @@ function ProfileForms({ user }: { user: AccountProfile }) {
       });
       // Session was revoked server-side; force a fresh sign in.
       localStorage.removeItem("savora.user");
-      router.push("/login");
+      router.push("/auth");
     } catch (reason) {
       setPasswordError(reason instanceof Error ? reason.message : "Could not change your password.");
     }
@@ -183,7 +183,7 @@ export default function AccountProfilePage() {
         <section className="section container">
           <h1>Profile</h1>
           <p className="muted">Please sign in to manage your profile.</p>
-          <Link className="btn" href="/login?next=/account/profile">Sign in</Link>
+          <Link className="btn" href="/auth?next=/account/profile">Sign in</Link>
         </section>
       </PageShell>
     );

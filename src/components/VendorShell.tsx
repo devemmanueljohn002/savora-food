@@ -46,7 +46,7 @@ export function VendorSignIn() {
       <section className="section container">
         <h1>Vendor dashboard</h1>
         <p className="muted">Please sign in with your vendor account.</p>
-        <Link className="btn" href="/login?next=/vendor/dashboard">Sign in</Link>
+        <Link className="btn" href="/auth?next=/vendor/dashboard">Sign in</Link>
       </section>
     </PageShell>
   );

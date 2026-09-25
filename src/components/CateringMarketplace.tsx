@@ -103,7 +103,7 @@ export default function CateringMarketplace({ packages }: { packages: CateringPa
           ? (reason as { status?: number }).status
           : undefined;
       if (status === 401) {
-        router.push("/login?next=/catering");
+        router.push("/auth?next=/catering");
         return;
       }
       setError(reason instanceof Error ? reason.message : "Could not submit your request.");

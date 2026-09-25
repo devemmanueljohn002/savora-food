@@ -94,7 +94,7 @@ export default function AccountAddressesPage() {
         <section className="section container">
           <h1>Addresses</h1>
           <p className="muted">Please sign in to manage your delivery addresses.</p>
-          <Link className="btn" href="/login?next=/account/addresses">Sign in</Link>
+          <Link className="btn" href="/auth?next=/account/addresses">Sign in</Link>
         </section>
       </PageShell>
     );

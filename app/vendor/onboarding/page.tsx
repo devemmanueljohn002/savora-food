@@ -47,7 +47,7 @@ export default function VendorOnboardingPage() {
         if (cancelled) return;
         const message = reason instanceof Error ? reason.message : "Could not load your vendor profile.";
         if (/401|sign in/i.test(message)) {
-          window.location.href = "/login?next=/vendor/onboarding";
+          window.location.href = "/auth?next=/vendor/onboarding";
           return;
         }
         setError(message);

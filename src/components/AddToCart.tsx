@@ -28,7 +28,7 @@ export default function AddToCart({ productId, quantity = 1, label = "Add to car
     } catch (reason) {
       const status = typeof reason === "object" && reason !== null && "status" in reason ? (reason as { status?: number }).status : undefined;
       if (status === 401) {
-        router.push("/login");
+        router.push("/auth");
         return;
       }
       setError(reason instanceof Error ? reason.message : "Could not add to cart.");

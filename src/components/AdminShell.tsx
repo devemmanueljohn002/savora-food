@@ -64,7 +64,7 @@ export function AdminSignIn() {
       <section className="section container">
         <h1>Admin</h1>
         <p className="muted">Please sign in with an admin account.</p>
-        <Link className="btn" href="/login?next=/admin/dashboard">Sign in</Link>
+        <Link className="btn" href="/auth?next=/admin/dashboard">Sign in</Link>
       </section>
     </PageShell>
   );
