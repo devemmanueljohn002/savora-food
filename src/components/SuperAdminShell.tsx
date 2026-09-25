@@ -60,7 +60,7 @@ export function SuperAdminSignIn() {
       <section className="section container">
         <h1>Super admin</h1>
         <p className="muted">Please sign in with a super admin account.</p>
-        <Link className="btn" href="/login?next=/super-admin/dashboard">Sign in</Link>
+        <Link className="btn" href="/auth?next=/super-admin/dashboard">Sign in</Link>
       </section>
     </PageShell>
   );

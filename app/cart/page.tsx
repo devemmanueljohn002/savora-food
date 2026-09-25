@@ -17,7 +17,7 @@ export default function Page() {
         <section className="section container">
           <h1>Your cart</h1>
           <p>Please sign in to view your saved cart.</p>
-          <Link className="btn" href="/login">Sign in</Link>
+          <Link className="btn" href="/auth">Sign in</Link>
         </section>
       </PageShell>
     );
