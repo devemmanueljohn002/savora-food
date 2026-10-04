@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { CircleCheck, Info, Wallet } from "lucide-react";
+import { formatNaira } from "@/components/VendorShell";
 import type { PayoutOverview, PayoutRecipient, PayoutWithdrawal, PaystackBankOption } from "@/lib/savora-api";
 
 /**
@@ -30,10 +32,6 @@ export type PayoutPanelProps = {
   }) => Promise<{ accountName?: string; reused?: boolean }>;
   onWithdraw: (input: { amountKobo: number; idempotencyKey: string }) => Promise<PayoutWithdrawal>;
 };
-
-function naira(value: number): string {
-  return `₦${value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 export function withdrawalBadge(status: string): string {
   if (status === "SUCCESS") return "badge-success";
@@ -146,33 +144,60 @@ export default function PayoutPanel(props: PayoutPanelProps) {
   const holdDays = overview?.limits.holdDays ?? 0;
 
   return (
-    <>
+    <div className="payout-panel">
       <h2 style={{ marginTop: 32 }}>Withdraw to bank</h2>
-      <div className="card card-body" style={{ display: "grid", gap: 12, maxWidth: 560 }}>
-        <p className="muted" style={{ margin: 0 }}>
-          Available: <strong>{naira(props.availableKobo / 100)}</strong>
-          {props.pendingKobo > 0 ? ` · ${naira(props.pendingKobo / 100)} still in hold` : ""}
-          {overview ? ` · Min ${naira(overview.limits.min)} · Max ${naira(overview.limits.max)}` : ""}
-        </p>
-        {account?.verified ? (
-          <p className="muted" style={{ margin: 0 }}>
-            Saved account: <strong>{account.accountName}</strong> · {account.accountNumber}
+      <div className="card card-body payout-form-card" style={{ padding: 20 }}>
+        <div className="payout-chips" role="group" aria-label="Balance limits">
+          <div className="payout-chip">
+            <span className="payout-chip-label">Available</span>
+            <span className="payout-chip-value">{formatNaira(props.availableKobo / 100)}</span>
+          </div>
+          <div className="payout-chip">
+            <span className="payout-chip-label">Min</span>
+            <span className="payout-chip-value">{overview ? formatNaira(overview.limits.min) : "—"}</span>
+          </div>
+          <div className="payout-chip">
+            <span className="payout-chip-label">Max</span>
+            <span className="payout-chip-value">{overview ? formatNaira(overview.limits.max) : "—"}</span>
+          </div>
+        </div>
+        {props.pendingKobo > 0 ? (
+          <p className="muted" style={{ margin: "0 0 4px" }}>
+            {formatNaira(props.pendingKobo / 100)} still in hold.
           </p>
+        ) : null}
+        {account?.verified ? (
+          <div className="confirm-box" role="status" style={{ marginTop: 12 }}>
+            <CircleCheck aria-hidden="true" />
+            <span>
+              Saved account: <strong>{account.accountName}</strong> · {account.accountNumber}
+            </span>
+          </div>
         ) : (
-          <p className="muted" style={{ margin: 0 }}>
+          <p className="muted" style={{ margin: "12px 0 0" }}>
             Verify your bank account below before withdrawing.
           </p>
         )}
         {account?.coolingActive ? (
-          <p className="auth-error" style={{ margin: 0 }}>
-            For your protection, withdrawals are paused for {account.coolingHours}h after a bank account change
-            {account.coolingEndsAt ? ` — available again ${new Date(account.coolingEndsAt).toLocaleString()}` : ""}.
-          </p>
+          <div className="cooling-box" role="alert" style={{ marginTop: 12 }}>
+            <Info aria-hidden="true" />
+            <span>
+              For your protection, withdrawals are paused for {account.coolingHours}h after a bank account change
+              {account.coolingEndsAt ? ` — available again ${new Date(account.coolingEndsAt).toLocaleString()}` : ""}.
+            </span>
+          </div>
         ) : null}
 
-        <label>
-          Bank
-          <select value={bankCode} onChange={(event) => setBankCode(event.target.value)}>
+        <div className="payout-field" style={{ marginTop: 16 }}>
+          <label className="field-label" htmlFor="payout-bank">
+            Bank
+          </label>
+          <select
+            id="payout-bank"
+            className="input"
+            value={bankCode}
+            onChange={(event) => setBankCode(event.target.value)}
+          >
             <option value="">Select bank…</option>
             {(banks ?? []).map((bank) => (
               <option key={bank.code} value={bank.code}>
@@ -180,23 +205,29 @@ export default function PayoutPanel(props: PayoutPanelProps) {
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          Account number
+        </div>
+
+        <div className="payout-field">
+          <label className="field-label" htmlFor="payout-account">
+            Account number
+          </label>
           <input
+            id="payout-account"
+            className="input"
             value={accountNumber}
             inputMode="numeric"
             maxLength={10}
             placeholder="10-digit account number"
             onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, ""))}
           />
-        </label>
-        <div className="row">
+        </div>
+
+        <div className="payout-actions">
           <button className="btn btn-secondary" type="button" onClick={handleResolve} disabled={resolving}>
             {resolving ? "Verifying…" : "Verify account"}
           </button>
           <button
-            className="btn"
+            className="btn secondary"
             type="button"
             onClick={handleSave}
             disabled={props.saving || !resolvedName}
@@ -208,17 +239,26 @@ export default function PayoutPanel(props: PayoutPanelProps) {
         {resolvedName ? <p className="auth-success">Account name: {resolvedName}</p> : null}
         {resolveError ? <p className="auth-error">{resolveError}</p> : null}
 
-        <label>
-          Amount (₦)
-          <input
-            value={amount}
-            inputMode="decimal"
-            placeholder="e.g. 5000"
-            onChange={(event) => setAmount(event.target.value)}
-          />
-        </label>
+        <div className="payout-field" style={{ marginTop: 4 }}>
+          <label className="field-label" htmlFor="payout-amount">
+            Amount (₦)
+          </label>
+          <div className="amount-wrap">
+            <span className="amount-prefix" aria-hidden="true">
+              ₦
+            </span>
+            <input
+              id="payout-amount"
+              className="input"
+              value={amount}
+              inputMode="decimal"
+              placeholder="e.g. 5000"
+              onChange={(event) => setAmount(event.target.value)}
+            />
+          </div>
+        </div>
         <button
-          className="btn"
+          className="btn btn-block btn-tall"
           type="button"
           onClick={handleWithdraw}
           disabled={props.withdrawing || account?.coolingActive === true}
@@ -227,16 +267,24 @@ export default function PayoutPanel(props: PayoutPanelProps) {
         </button>
         {formError ? <p className="auth-error">{formError}</p> : null}
         {formNote ? <p className="auth-success">{formNote}</p> : null}
-        <p className="muted" style={{ margin: 0 }}>
-          Withdrawals under {overview ? naira(overview.limits.autoApproveBelow) : "the threshold"} are sent
-          automatically; larger ones need finance approval.
-          {holdDays > 0 ? ` ${subject === "rider" ? "Delivery fees" : "Earnings"} unlock after a ${holdDays}-day hold.` : ""}
-        </p>
+        <div className="info-box" style={{ marginTop: 14 }}>
+          <Info aria-hidden="true" />
+          <span>
+            Withdrawals under {overview ? formatNaira(overview.limits.autoApproveBelow) : "the threshold"} are sent
+            automatically; larger ones need finance approval.
+            {holdDays > 0
+              ? ` ${subject === "rider" ? "Delivery fees" : "Earnings"} unlock after a ${holdDays}-day hold.`
+              : ""}
+          </span>
+        </div>
       </div>
 
       <h2 style={{ marginTop: 32 }}>Withdrawal history</h2>
       {(overview?.withdrawals ?? []).length === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state payout-empty">
+          <p className="empty-state-icon" aria-hidden="true">
+            <Wallet />
+          </p>
           <p className="empty-state-title">No withdrawals yet</p>
           <p className="empty-state-desc">
             {subject === "rider" ? "Delivery fees" : "Settled earnings"} unlock after the hold period, then you can
@@ -244,28 +292,24 @@ export default function PayoutPanel(props: PayoutPanelProps) {
           </p>
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
+        <div className="payout-list">
           {(overview?.withdrawals ?? []).map((w) => (
-            <div className="card card-body" key={w.id}>
-              <div className="row">
-                <div>
-                  <strong>{w.reference}</strong>
-                  <p className="muted" style={{ margin: "4px 0 0" }}>
-                    {new Date(w.createdAt).toLocaleString()}
-                    {w.failureReason ? ` · ${w.failureReason}` : ""}
-                  </p>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={{ margin: "0 0 6px" }}>
-                    <strong className="price">{naira(w.amount)}</strong>
-                  </p>
-                  <span className={`badge ${withdrawalBadge(w.status)}`}>{w.status}</span>
-                </div>
+            <div className="payout-row" key={w.id}>
+              <div className="payout-row-main">
+                <p className="payout-row-ref">{w.reference}</p>
+                <p className="payout-row-sub">
+                  {new Date(w.createdAt).toLocaleString()}
+                  {w.failureReason ? ` · ${w.failureReason}` : ""}
+                </p>
+              </div>
+              <div className="payout-row-side">
+                <p className="payout-row-amt price">{formatNaira(w.amount)}</p>
+                <span className={`badge ${withdrawalBadge(w.status)}`}>{w.status}</span>
               </div>
             </div>
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

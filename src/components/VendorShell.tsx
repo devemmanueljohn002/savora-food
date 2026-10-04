@@ -15,7 +15,7 @@ export function VendorShell({ profile, title, sub, children }: {
   return (
     <PageShell>
       <section className="section container">
-        <div className="row" style={{ alignItems: "flex-start", marginBottom: 6 }}>
+        <div className="row vendor-head" style={{ alignItems: "flex-start", marginBottom: 6 }}>
           <div>
             <h1 style={{ margin: 0 }}>{title}</h1>
             {sub ? <p className="section-sub" style={{ marginTop: 8, marginBottom: 0 }}>{sub}</p> : null}
@@ -54,6 +54,16 @@ export function VendorSignIn() {
 
 export function naira(amount: number): string {
   return `₦${amount.toLocaleString("en-NG")}`;
+}
+
+/**
+ * Consistent NGN display with two decimals everywhere (₦78,502.50, ₦0.00).
+ * Display only — never use for stored or transmitted values.
+ */
+const nairaFormatter = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" });
+
+export function formatNaira(amount: number): string {
+  return nairaFormatter.format(Number.isFinite(amount) ? amount : 0);
 }
 
 export function orderBadge(status: string): string {

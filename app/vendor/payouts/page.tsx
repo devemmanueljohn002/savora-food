@@ -1,7 +1,7 @@
 "use client";
 
 import PayoutPanel from "@/components/PayoutPanel";
-import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
+import { VendorShell, VendorSignIn, formatNaira } from "@/components/VendorShell";
 import {
   useRequestVendorWithdrawal,
   useSaveVendorRecipient,
@@ -47,22 +47,24 @@ export default function VendorPayoutsPage() {
         <p className="muted">Loading earnings…</p>
       ) : earnings.data ? (
         <>
-          <div className="hero-stats">
-            <div className="stat">
-              <b>{naira(earnings.data.wallet ? earnings.data.wallet.available : earnings.data.availableBalance)}</b>
-              <span>Available balance</span>
+          <div className="payout-stats">
+            <div className="stat-card payout-stat-strong">
+              <div className="stat-card-top">Available balance</div>
+              <p className="stat-card-value">
+                {formatNaira(earnings.data.wallet ? earnings.data.wallet.available : earnings.data.availableBalance)}
+              </p>
             </div>
-            <div className="stat">
-              <b>{naira(earnings.data.wallet?.pending ?? 0)}</b>
-              <span>Pending (hold period)</span>
+            <div className="stat-card">
+              <div className="stat-card-top">Pending (hold period)</div>
+              <p className="stat-card-value">{formatNaira(earnings.data.wallet?.pending ?? 0)}</p>
             </div>
-            <div className="stat">
-              <b>{naira(earnings.data.last30Days.net)}</b>
-              <span>Net · last 30 days ({earnings.data.last30Days.orders} orders)</span>
+            <div className="stat-card">
+              <div className="stat-card-top">Net · last 30 days ({earnings.data.last30Days.orders} orders)</div>
+              <p className="stat-card-value">{formatNaira(earnings.data.last30Days.net)}</p>
             </div>
-            <div className="stat">
-              <b>{naira(earnings.data.paidOut)}</b>
-              <span>Total paid out</span>
+            <div className="stat-card">
+              <div className="stat-card-top">Total paid out</div>
+              <p className="stat-card-value">{formatNaira(earnings.data.paidOut)}</p>
             </div>
           </div>
 
@@ -85,7 +87,7 @@ export default function VendorPayoutsPage() {
 
           <h2 style={{ marginTop: 32 }}>Payout history</h2>
           {earnings.data.payouts.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state payout-empty">
               <p className="empty-state-title">No payouts yet</p>
               <p className="empty-state-desc">
                 Settled earnings accumulate in your available balance. Payouts are processed by the Savora Food finance
@@ -93,27 +95,23 @@ export default function VendorPayoutsPage() {
               </p>
             </div>
           ) : (
-            <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
+            <div className="payout-list">
               {earnings.data.payouts.map((payout) => (
-                <div className="card card-body" key={payout.id}>
-                  <div className="row">
-                    <div>
-                      <strong>{payout.reference}</strong>
-                      <p className="muted" style={{ margin: "4px 0 0" }}>
-                        {[payout.periodStart, payout.periodEnd].filter(Boolean).join(" → ") || "Ad-hoc"} · Gross{" "}
-                        {naira(payout.gross)} · Commission {naira(payout.commission)}
-                      </p>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ margin: "0 0 6px" }}>
-                        <strong className="price">{naira(payout.net)}</strong>
-                      </p>
-                      <span
-                        className={`badge ${payout.status === "PAID" ? "badge-success" : payout.status === "FAILED" ? "badge-danger" : "badge-warning"}`}
-                      >
-                        {payout.status}
-                      </span>
-                    </div>
+                <div className="payout-row" key={payout.id}>
+                  <div className="payout-row-main">
+                    <p className="payout-row-ref">{payout.reference}</p>
+                    <p className="payout-row-sub">
+                      {[payout.periodStart, payout.periodEnd].filter(Boolean).join(" → ") || "Ad-hoc"} · Gross{" "}
+                      {formatNaira(payout.gross)} · Commission {formatNaira(payout.commission)}
+                    </p>
+                  </div>
+                  <div className="payout-row-side">
+                    <p className="payout-row-amt price">{formatNaira(payout.net)}</p>
+                    <span
+                      className={`badge ${payout.status === "PAID" ? "badge-success" : payout.status === "FAILED" ? "badge-danger" : "badge-warning"}`}
+                    >
+                      {payout.status}
+                    </span>
                   </div>
                 </div>
               ))}
