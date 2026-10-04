@@ -103,6 +103,33 @@ export function generateDeliveryOtp(): string {
   return String(randomInt(1000, 10000));
 }
 
+/**
+ * Wrong-code attempts before the rider is locked out of the delivery-code
+ * handshake and an admin must re-issue the code. The SAME constant drives
+ * the deliver handler and the lockout wording, so they can never disagree.
+ */
+export const DELIVERY_CODE_MAX_ATTEMPTS = 5;
+
+/**
+ * Issue (or re-issue) the 4-digit handover code for an order. Called when
+ * the rider picks up the order and by the admin override. Resets the
+ * wrong-attempt counter so a fresh code always means fresh attempts.
+ * Returns the code (or null when the OTP handshake is disabled by config).
+ */
+export async function issueDeliveryCode(orderId: string): Promise<string | null> {
+  const enabled = await getOtpEnabled().catch(() => true);
+  const code = enabled ? generateDeliveryOtp() : null;
+  await db()`
+    UPDATE orders SET delivery_otp = ${code}, require_otp = ${enabled}, updated_at = NOW()
+    WHERE id = ${orderId}
+  `;
+  await db()`
+    UPDATE deliveries SET delivery_code_attempts = 0
+    WHERE order_id = ${orderId} AND status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+  `;
+  return code;
+}
+
 /** Timing-safe comparison for short delivery codes. */
 export function verifyDeliveryOtp(expected: string | null, supplied: string | null): boolean {
   if (!expected || !supplied) return false;
@@ -717,6 +744,9 @@ export type OrderTracking = {
   total: number;
   vendor: { name: string; slug: string; phone: string | null };
   address: { fullAddress: string; city: string | null; state: string | null } | null;
+  /** 4-digit handover code, present once the rider picks up (null before). */
+  deliveryOtp: string | null;
+  requireOtp: boolean;
   delivery: {
     status: string;
     riderName: string | null;
@@ -751,6 +781,8 @@ export async function getOrderTrackingByNumber(orderNumber: string): Promise<Ord
       vendor_name: string;
       vendor_slug: string;
       vendor_phone: string | null;
+      delivery_otp: string | null;
+      require_otp: boolean;
       address: string | null;
       city: string | null;
       state: string | null;
@@ -761,6 +793,7 @@ export async function getOrderTrackingByNumber(orderNumber: string): Promise<Ord
             COALESCE(o.service_fee, 0)::text AS service_fee,
             COALESCE(o.tax_amount, 0)::text AS tax_amount,
             o.discount::text, o.total::text, o.created_at,
+            o.delivery_otp, COALESCE(o.require_otp, FALSE) AS require_otp,
             v.business_name AS vendor_name, v.slug AS vendor_slug, v.phone AS vendor_phone,
             a.full_address AS address, a.city, a.state
      FROM orders o
@@ -824,6 +857,8 @@ export async function getOrderTrackingByNumber(orderNumber: string): Promise<Ord
       order.address == null
         ? null
         : { fullAddress: order.address, city: order.city, state: order.state },
+    deliveryOtp: order.delivery_otp ?? null,
+    requireOtp: Boolean(order.require_otp),
     delivery: delivery
       ? {
           status: delivery.status,
@@ -870,13 +905,9 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
   let vendorUserId: string | null = null;
   let orderNumber = "";
   let orderTotal = 0;
-  let deliveryOtp: string | null = null;
-  let requireOtp = false;
-  const otpEnabled = await getOtpEnabled().catch(() => true);
-  if (otpEnabled) {
-    deliveryOtp = generateDeliveryOtp();
-    requireOtp = true;
-  }
+  // No handover code at payment time: the 4-digit delivery code is issued
+  // when the rider picks up the order (see issueDeliveryCode), so a code
+  // shown early can never go stale before handover.
   await sql.begin(async (tx) => {
     const orders = await tx<{ id: string; user_id: string; status: string; order_number: string; total: string; vendor_id: string }[]>`
       SELECT id, user_id, status, order_number, total::text, vendor_id FROM orders WHERE id = ${orderId} LIMIT 1
@@ -898,7 +929,7 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
     await tx`
       UPDATE orders
       SET status = 'PAID', payment_status = 'PAID', updated_at = NOW(),
-          delivery_otp = ${deliveryOtp}, require_otp = ${requireOtp}
+          delivery_otp = NULL, require_otp = FALSE
       WHERE id = ${orderId}
     `;
     await tx`
@@ -957,10 +988,8 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
     userId,
     type: "ORDER",
     title: `Payment confirmed for ${orderNumber}`,
-    body: deliveryOtp
-      ? `Your payment of ₦${orderTotal.toLocaleString()} was verified. The vendor has been notified and will start preparing your order. Your delivery code is ${deliveryOtp} — share it with the rider on arrival.`
-      : `Your payment of ₦${orderTotal.toLocaleString()} was verified. The vendor has been notified and will start preparing your order.`,
-    data: { orderId, status: "PAID", requireOtp, hasDeliveryOtp: Boolean(deliveryOtp) },
+    body: `Your payment of ₦${orderTotal.toLocaleString()} was verified. The vendor has been notified and will start preparing your order. You will receive a 4-digit delivery code once your rider picks it up — share it with the rider on arrival.`,
+    data: { orderId, status: "PAID" },
   }).catch(() => undefined);
 
   // Vendor receives the order the moment it becomes PAID.

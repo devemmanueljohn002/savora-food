@@ -1742,6 +1742,8 @@ export type OrderTracking = {
   total: number;
   vendor: { name: string; slug: string; phone: string | null };
   address: { fullAddress: string; city: string | null; state: string | null } | null;
+  deliveryOtp: string | null;
+  requireOtp: boolean;
   delivery: {
     status: string;
     riderName: string | null;

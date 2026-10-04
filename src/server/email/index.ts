@@ -1,5 +1,7 @@
 import { getEnv } from "../env";
 import { buildResetEmail } from "./templates.js";
+import { buildOrderDeliveredEmail, type OrderDeliveredInput } from "./order-delivered";
+import { signUnsubscribeToken } from "./unsubscribe";
 
 export type EmailMessage = {
   to: string;
@@ -108,4 +110,57 @@ export async function sendVerificationReminderEmail(to: string, verifyUrl: strin
     subject: "Verify your Savora Food email",
     text: `It's been a little while since you joined Savora Food — your account is still waiting on email verification before it can be fully activated.\n\nConfirm your email now (link expires in 24 hours):\n\n${verifyUrl}\n\nIf you did not create an account with Savora Food, you can safely ignore this email.`,
   });
+}
+
+export type OrderDeliveredEmailInput = Omit<
+  OrderDeliveredInput,
+  | "appUrl"
+  | "logoUrl"
+  | "rateUrl"
+  | "trackUrl"
+  | "supportUrl"
+  | "termsUrl"
+  | "privacyUrl"
+  | "unsubscribeUrl"
+>;
+
+/**
+ * Sends the redesigned "Order delivered" email via the configured sender
+ * (Brevo when BREVO_API_KEY is set). Links are built from APP_URL and the
+ * footer carries a signed one-click unsubscribe link for this customer.
+ *
+ * Call ONLY after the rider's delivery-confirmation transaction commits —
+ * never on a status change alone. Returns false when the customer opted out
+ * of order update emails (in-app notification still fires from the caller).
+ * Fail-open on the preference read: a missing column/row must never swallow
+ * a delivery receipt.
+ */
+export async function sendOrderDeliveredEmail(
+  to: string,
+  userId: string,
+  input: OrderDeliveredEmailInput,
+): Promise<boolean> {
+  const { appUrl, jwtSecret } = getEnv();
+  try {
+    const { db } = await import("../db");
+    const rows = await db()<{ email_updates_opt_out: boolean | null }[]>`
+      SELECT email_updates_opt_out FROM users WHERE id = ${userId} LIMIT 1
+    `;
+    if (rows[0]?.email_updates_opt_out) return false;
+  } catch {
+    // preference unreadable (e.g. migration not yet applied) — send anyway.
+  }
+  const built = buildOrderDeliveredEmail({
+    ...input,
+    appUrl,
+    logoUrl: `${appUrl}/savora-logo-wide.png`,
+    rateUrl: `${appUrl}/dashboard?tab=orders`,
+    trackUrl: `${appUrl}/track`,
+    supportUrl: `${appUrl}/contact`,
+    termsUrl: `${appUrl}/terms`,
+    privacyUrl: `${appUrl}/privacy`,
+    unsubscribeUrl: `${appUrl}/unsubscribe?token=${encodeURIComponent(signUnsubscribeToken(userId, jwtSecret))}`,
+  });
+  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  return true;
 }

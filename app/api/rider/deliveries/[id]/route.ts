@@ -202,9 +202,16 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       if (!["ASSIGNED", "GOING_TO_VENDOR", "ARRIVED_AT_VENDOR"].includes(delivery.status)) {
         throw ApiError.conflict("This delivery cannot be picked up.");
       }
+      // The 4-digit handover code is born here, atomically with pickup —
+      // never at payment, so a code can never go stale before handover.
+      // The customer sees it on tracking from this moment; the rider never
+      // sees it in API responses and must collect it from the customer.
+      const { generateDeliveryOtp, getOtpEnabled } = await import("@/server/orders");
+      const otpEnabled = await getOtpEnabled().catch(() => true);
+      const handoverCode = otpEnabled ? generateDeliveryOtp() : null;
       await sql.begin(async (tx) => {
-        await tx`UPDATE deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
-        await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', updated_at = NOW() WHERE id = ${delivery.order_id}`;
+        await tx`UPDATE deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), delivery_code_attempts = 0, tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
+        await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = ${handoverCode}, require_otp = ${otpEnabled}, updated_at = NOW() WHERE id = ${delivery.order_id}`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note)
           VALUES (${delivery.order_id}, 'OUT_FOR_DELIVERY', ${parsed.data.note ?? "Rider picked up the order"})
@@ -212,7 +219,9 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       });
       await notifyWithEmail(delivery.customer_id, {
         title: `Order ${delivery.order_number} is on its way`,
-        body: `Your order has been picked up and is on the way.`,
+        body: handoverCode
+          ? `Your order has been picked up and is on the way. Your delivery code is ${handoverCode} — share it with the rider on arrival.`
+          : `Your order has been picked up and is on the way.`,
         data: { orderId: delivery.order_id, status: "OUT_FOR_DELIVERY" },
       });
       if (vendorUserId) {
@@ -240,10 +249,12 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       if (delivery.require_otp) {
         const supplied = (parsed.data.otp ?? parsed.data.code ?? "").trim();
         if (!supplied) throw ApiError.validation("Enter the 4-digit delivery code from the customer.");
-        if (delivery.delivery_code_attempts >= 3) {
-          throw ApiError.forbidden("Too many wrong codes. Ask the vendor or support to re-issue the code.");
+        const { DELIVERY_CODE_MAX_ATTEMPTS, verifyDeliveryOtp } = await import("@/server/orders");
+        if (delivery.delivery_code_attempts >= DELIVERY_CODE_MAX_ATTEMPTS) {
+          throw ApiError.forbidden(
+            `Too many wrong codes — this code is locked after ${DELIVERY_CODE_MAX_ATTEMPTS} attempts. Contact support to re-issue a new delivery code.`,
+          );
         }
-        const { verifyDeliveryOtp } = await import("@/server/orders");
         if (!verifyDeliveryOtp(delivery.delivery_otp, supplied)) {
           await sql`UPDATE deliveries SET delivery_code_attempts = delivery_code_attempts + 1 WHERE id = ${id}`;
           throw ApiError.validation("Incorrect delivery code. It was not completed.");
@@ -324,11 +335,82 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       } catch {
         // ledger failure is auditable via missing order_money_splits row; delivery stays DELIVERED
       }
-      await notifyWithEmail(delivery.customer_id, {
-        title: `Order ${delivery.order_number} delivered`,
-        body: "Delivery verified. Enjoy your meal! Please rate your experience.",
-        data: { orderId: delivery.order_id, status: "DELIVERED" },
-      });
+      // Post-confirmation customer email: this is the ONLY place the
+      // "Order delivered" email is sent — after the delivery transaction
+      // commits, never on a status change alone. Notification failures must
+      // never fail an already-completed delivery.
+      try {
+        const detail = await sql<{
+          customer_email: string;
+          customer_name: string | null;
+          vendor_name: string;
+          subtotal: string;
+          delivery_fee: string;
+          service_fee: string | null;
+          tax_amount: string | null;
+          discount: string;
+          total: string;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          delivered_at: Date | null;
+        }[]>`
+          SELECT u.email AS customer_email,
+                 NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') AS customer_name,
+                 v.business_name AS vendor_name,
+                 o.subtotal::text AS subtotal, o.delivery_fee::text AS delivery_fee,
+                 o.service_fee::text AS service_fee, o.tax_amount::text AS tax_amount,
+                 o.discount::text AS discount, o.total::text AS total,
+                 a.full_address AS address, a.city, a.state,
+                 d.delivered_at
+          FROM orders o
+          JOIN users u ON u.id = o.user_id
+          JOIN vendors v ON v.id = o.vendor_id
+          LEFT JOIN addresses a ON a.id = o.address_id
+          JOIN deliveries d ON d.id = ${id}
+          WHERE o.id = ${delivery.order_id}
+          LIMIT 1
+        `;
+        const lines = await sql<{ name: string; quantity: number; line_total: string }[]>`
+          SELECT name, quantity, line_total::text AS line_total
+          FROM order_items WHERE order_id = ${delivery.order_id} ORDER BY created_at ASC
+        `;
+        const info = detail[0];
+        if (info) {
+          const { notifyUser } = await import("@/server/vendors");
+          await notifyUser({
+            userId: delivery.customer_id,
+            type: "ORDER",
+            title: `Order ${delivery.order_number} delivered`,
+            body: "Delivery verified. Enjoy your meal! Please rate your experience.",
+            data: { orderId: delivery.order_id, status: "DELIVERED" },
+          }).catch(() => undefined);
+          const { sendOrderDeliveredEmail } = await import("@/server/email");
+          await sendOrderDeliveredEmail(info.customer_email, delivery.customer_id, {
+            orderNumber: delivery.order_number,
+            vendorName: info.vendor_name,
+            customerName: info.customer_name,
+            items: lines.map((line) => ({
+              name: line.name,
+              quantity: line.quantity,
+              lineTotal: Number(line.line_total),
+            })),
+            subtotal: Number(info.subtotal),
+            deliveryFee: Number(info.delivery_fee),
+            serviceFee: Number(info.service_fee ?? 0),
+            tax: Number(info.tax_amount ?? 0),
+            discount: Number(info.discount),
+            total: Number(info.total),
+            deliveredAt: (info.delivered_at ?? new Date()).toISOString(),
+            address:
+              info.address == null
+                ? null
+                : { fullAddress: info.address, city: info.city, state: info.state },
+          }).catch(() => undefined);
+        }
+      } catch {
+        // delivery stays DELIVERED regardless of notification outcome
+      }
       if (vendorUserId) {
         await notifyWithEmail(vendorUserId, {
           title: `Order ${delivery.order_number} delivered`,

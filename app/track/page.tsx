@@ -264,6 +264,12 @@ function TrackingResult({ tracked }: { tracked: OrderTracking }) {
               <p style={{ margin: "8px 0 0" }}>
                 <span className="badge badge-info">{tracked.delivery.status.replaceAll("_", " ")}</span>
               </p>
+              {tracked.requireOtp && tracked.deliveryOtp && !CLOSED.includes(tracked.status) && (
+                <p className="auth-success" role="status" style={{ margin: "12px 0 0" }}>
+                  Delivery code: <strong>{tracked.deliveryOtp}</strong> — share it with your rider on
+                  arrival.
+                </p>
+              )}
               {(tracked.delivery.progressPct ?? 0) > 0 && !CLOSED.includes(tracked.status) && (
                 <p style={{ margin: "8px 0 0" }} aria-label={`Delivery progress ${tracked.delivery.progressPct}%`}>
                   <span
