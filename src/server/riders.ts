@@ -9,6 +9,8 @@ export type RiderRow = {
   vehicle_type: string | null;
   vehicle_number: string | null;
   status: string;
+  is_online: boolean | null;
+  current_zone: string | null;
   verification_status: string;
   verified_at: Date | null;
   rating_average: string;

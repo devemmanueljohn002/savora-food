@@ -1294,6 +1294,8 @@ export type RiderProfile = {
   vehicleType: string | null;
   vehicleNumber: string | null;
   status: string;
+  isOnline?: boolean | null;
+  currentZone?: string | null;
   verificationStatus: string;
   verifiedAt: string | null;
   ratingAverage: number;
@@ -1312,6 +1314,7 @@ export function updateRiderProfile(input: {
   vehicleType?: string | null;
   vehicleNumber?: string | null;
   status?: "ACTIVE" | "OFFLINE";
+  currentZone?: string | null;
 }) {
   return apiSend<Partial<RiderProfile>>("/rider/profile", "PATCH", input).then((result) => result.data);
 }

@@ -47,8 +47,8 @@ export function RiderShell({ profile, title, sub, children }: {
             {sub ? <p className="section-sub" style={{ marginTop: 8, marginBottom: 0 }}>{sub}</p> : null}
           </div>
           <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span className={`badge ${profile.status === "ACTIVE" ? "badge-success" : "badge"}`}>
-              {profile.status === "ACTIVE" ? "Online" : "Offline"}
+            <span className={`badge ${(profile.isOnline ?? profile.status === "ACTIVE") ? "badge-success" : "badge"}`}>
+              {(profile.isOnline ?? profile.status === "ACTIVE") ? "Online" : "Offline"}
             </span>
             <span
               className={`badge ${profile.verificationStatus === "APPROVED" ? "badge-success" : "badge-warning"}`}

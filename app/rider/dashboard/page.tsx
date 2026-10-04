@@ -54,7 +54,10 @@ export default function RiderDashboardPage() {
   if (profile.isError || !profile.data) return <RiderSignIn />;
 
   const me = profile.data;
-  const online = me.status === "ACTIVE";
+  // Presence is stored as status + is_online (kept in sync by the API).
+  // Prefer the explicit isOnline flag when present so a legacy drift
+  // (ACTIVE + is_online FALSE) shows Offline instead of an empty job feed.
+  const online = me.isOnline ?? me.status === "ACTIVE";
   const current = (active.data ?? [])[0] ?? null;
   const PerformAction = current ? (
     <ActiveDeliveryCard deliveryId={current.id} status={current.status} requireOtp={current.requireOtp ?? false} />

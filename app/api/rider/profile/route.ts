@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
         vehicleType: rider.vehicle_type,
         vehicleNumber: rider.vehicle_number,
         status: rider.status,
+        isOnline: rider.is_online ?? rider.status === "ACTIVE",
+        currentZone: rider.current_zone ?? null,
         verificationStatus: rider.verification_status,
         verifiedAt: rider.verified_at,
         ratingAverage: Number(rider.rating_average),
@@ -84,6 +86,8 @@ export async function PATCH(request: NextRequest) {
       vehicle_type: string | null;
       vehicle_number: string | null;
       status: string;
+      is_online: boolean;
+      current_zone: string | null;
     }[]>`
       UPDATE delivery_partners SET
         name = COALESCE(${d.name ?? null}, name),
@@ -95,7 +99,7 @@ export async function PATCH(request: NextRequest) {
         last_active_at = CASE WHEN ${goingOnline} THEN NOW() ELSE last_active_at END
         ${d.currentZone === undefined ? sql`` : sql`, current_zone = ${d.currentZone}`}
       WHERE id = ${rider.id}
-      RETURNING id, name, phone, vehicle_type, vehicle_number, status
+      RETURNING id, name, phone, vehicle_type, vehicle_number, status, is_online, current_zone
     `;
     const next = rows[0];
     return NextResponse.json(
@@ -106,6 +110,8 @@ export async function PATCH(request: NextRequest) {
         vehicleType: next.vehicle_type,
         vehicleNumber: next.vehicle_number,
         status: next.status,
+        isOnline: next.is_online,
+        currentZone: next.current_zone,
       }),
     );
   } catch (error) {

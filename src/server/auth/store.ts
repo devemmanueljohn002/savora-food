@@ -100,9 +100,13 @@ export async function createDeliveryPartnerProfile(input: {
   name: string;
   phone?: string;
 }): Promise<void> {
+  // New riders start OFFLINE with is_online=FALSE (column default) so the
+  // status <=> is_online invariant holds. They go online explicitly via
+  // PATCH /rider/profile, which sets both together. Inserting ACTIVE here
+  // previously left is_online FALSE, making dispatch skip them forever.
   await db()`
-    INSERT INTO delivery_partners (user_id, name, phone, status)
-    VALUES (${input.userId}, ${input.name}, ${input.phone ?? null}, 'ACTIVE')
+    INSERT INTO delivery_partners (user_id, name, phone, status, is_online)
+    VALUES (${input.userId}, ${input.name}, ${input.phone ?? null}, 'OFFLINE', FALSE)
   `;
 }
 

@@ -712,9 +712,9 @@ async function main() {
     }
     if (riderId) {
       await sql`
-        INSERT INTO delivery_partners (user_id, name, phone, vehicle_type, vehicle_number, status, verification_status, verified_at, rating_average, rating_count)
-        VALUES (${riderId}, 'Emeka Rider', '08012340009', 'Motorcycle', 'KJA-123-XY', 'ACTIVE', 'APPROVED', NOW(), 4.8, 120)
-        ON CONFLICT (user_id) DO NOTHING
+        INSERT INTO delivery_partners (user_id, name, phone, vehicle_type, vehicle_number, status, is_online, verification_status, verified_at, rating_average, rating_count)
+        VALUES (${riderId}, 'Emeka Rider', '08012340009', 'Motorcycle', 'KJA-123-XY', 'ACTIVE', TRUE, 'APPROVED', NOW(), 4.8, 120)
+        ON CONFLICT (user_id) DO UPDATE SET status = 'ACTIVE', is_online = TRUE, verification_status = 'APPROVED'
       `;
       const partner = await sql<{ id: string }[]>`SELECT id FROM delivery_partners WHERE user_id = ${riderId} LIMIT 1`;
       if (partner[0]) {
