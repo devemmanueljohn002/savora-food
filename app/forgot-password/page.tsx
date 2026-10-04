@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
         <div className="auth-card">
           {done ? (
             <p className="auth-success" role="status">
-              If that email is registered, a reset link is on its way. The link expires in 1 hour — check your inbox
+              If that email is registered, a reset link is on its way. The link expires in 30 minutes — check your inbox
               (and spam folder).
             </p>
           ) : (
@@ -71,7 +71,7 @@ export default function ForgotPasswordPage() {
 
         <p className="auth-note">
           <ShieldCheck className="auth-note-ico" aria-hidden="true" />
-          Reset links expire after 1 hour and can only be used once.
+          Reset links expire after 30 minutes and can only be used once.
         </p>
       </div>
     </PageShell>

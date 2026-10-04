@@ -25,9 +25,8 @@ export async function POST(request: Request) {
         userId: user.id,
         tokenHash: hashToken(rawToken),
         // Same constant the email wording uses (RESET_MINUTES): the link lives
-        // exactly as long as the email promises. make_interval accepts
-        // fractional hours, so 30 minutes is 0.5.
-        expiresHours: RESET_MINUTES / 60,
+        // exactly as long as the email promises.
+        expiresMinutes: RESET_MINUTES,
       });
       const resetUrl = `${getEnv().appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
       try {
@@ -48,6 +47,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(okMessage("If that email is registered, we've sent a reset link."));
   } catch (error) {
+    // Log the real failure (message + stack) for ops, but always return the
+    // generic envelope below — the client must not learn whether the email
+    // exists or what broke internally.
+    console.error("[auth] forgot-password request failed:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     const { envelope, status } = toEnvelope(error);
     return NextResponse.json(envelope, { status });
   }

@@ -173,11 +173,14 @@ export async function revokeAllSessionsForUser(userId: string): Promise<void> {
 export async function createPasswordResetToken(input: {
   userId: string;
   tokenHash: string;
-  expiresHours: number;
+  // Minutes, not hours: make_interval's `hours` argument is integer-typed, so
+  // fractional hours (e.g. 0.5 for 30 minutes) fail to resolve to an overload
+  // and throw. `mins` accepts whole minutes.
+  expiresMinutes: number;
 }): Promise<void> {
   await db()`
     INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-    VALUES (${input.userId}, ${input.tokenHash}, NOW() + make_interval(hours => ${input.expiresHours}))
+    VALUES (${input.userId}, ${input.tokenHash}, NOW() + make_interval(mins => ${input.expiresMinutes}))
   `;
 }
 
