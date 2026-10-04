@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { auditLog, requireAdminUser } from "@/server/admin";
 import { db } from "@/server/db";
-import { couponDto, type CouponRow } from "./[id]/route";
+import { couponDto, type CouponRow } from "@/server/coupons";
 
 const couponSchema = z.object({
   code: z.string().trim().min(2).max(50),
