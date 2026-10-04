@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
+import RoleGuard from "@/components/RoleGuard";
 import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile } from "@/lib/api/hooks";
 
 export default function VendorDashboardPage() {
@@ -30,6 +31,7 @@ export default function VendorDashboardPage() {
   );
 
   return (
+    <RoleGuard allow={["VENDOR", "ADMIN"]}>
     <VendorShell profile={profile.data} title={profile.data.businessName} sub="Here is what is happening in your kitchen today.">
       <div className="hero-stats">
         <div className="stat">
@@ -137,5 +139,6 @@ export default function VendorDashboardPage() {
         </div>
       </div>
     </VendorShell>
+    </RoleGuard>
   );
 }

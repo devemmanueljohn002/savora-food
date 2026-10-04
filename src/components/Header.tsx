@@ -29,6 +29,7 @@ import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
 import SignOutButton from "./SignOutButton";
 import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
+import { getAccountRouteForRole, getDashboardRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
 
@@ -46,10 +47,7 @@ const links: NavItem[] = [
 
 const shopLinks: NavItem[] = [...links];
 
-const savoraLinks: NavItem[] = [
-  { label: "My Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Track Order", href: "/track", icon: Bike },
-];
+const savoraLinks: NavItem[] = [{ label: "Track Order", href: "/track", icon: Bike }];
 
 function FavoriteCount() {
   const { data } = useFavorites();
@@ -114,9 +112,12 @@ export default function Header() {
 
   const firstName =
     currentUser?.firstName?.trim().split(" ")[0] || "Account";
-  // Account entry points always land on account settings. Role dashboards stay
-  // reachable from the drawer's "My Dashboard" row and the bottom tab bar.
-  const accountHref = "/account/profile";
+  // Account entry points follow the signed-in role: customers land on account
+  // settings, vendors/riders/admins on their own dashboard. While the user is
+  // still loading, fall back to the logged-out destinations (no flicker).
+  const accountHref = getAccountRouteForRole(currentUser?.role);
+  const dashboardHref = getDashboardRouteForRole(currentUser?.role);
+  const showConsumerShortcuts = usesConsumerTabs(currentUser?.role);
 
   useEffect(() => {
     if (!open) return;
@@ -198,14 +199,18 @@ export default function Header() {
         </div>
 
         <div className="hdr-actions">
-          <Link className="hdr-icon-btn" href="/dashboard?tab=favorites" aria-label="Favorites">
-            <Heart className="hdr-ico" aria-hidden="true" />
-            <FavoriteCount />
-          </Link>
-          <Link className="hdr-icon-btn" href="/cart" aria-label="Cart">
-            <ShoppingCart className="hdr-ico" aria-hidden="true" />
-            <CartCount />
-          </Link>
+          {showConsumerShortcuts ? (
+            <Link className="hdr-icon-btn" href="/dashboard?tab=favorites" aria-label="Favorites">
+              <Heart className="hdr-ico" aria-hidden="true" />
+              <FavoriteCount />
+            </Link>
+          ) : null}
+          {showConsumerShortcuts ? (
+            <Link className="hdr-icon-btn" href="/cart" aria-label="Cart">
+              <ShoppingCart className="hdr-ico" aria-hidden="true" />
+              <CartCount />
+            </Link>
+          ) : null}
           {currentUser ? (
             <Link
               className="hdr-account"
@@ -282,6 +287,7 @@ export default function Header() {
               <p className="hdr-sec-label" aria-hidden="true">Shop</p>
               {shopLinks.map(renderDrawerRow)}
               <p className="hdr-sec-label" aria-hidden="true">Account</p>
+              {renderDrawerRow({ label: "My Dashboard", href: dashboardHref, icon: LayoutDashboard })}
               {savoraLinks.map(renderDrawerRow)}
             </nav>
             <div className="hdr-drawer-foot">

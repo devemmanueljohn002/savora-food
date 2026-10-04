@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageShell from "@/components/PageShell";
+import RoleGuard from "@/components/RoleGuard";
 import { useAccount, useChangeAccountPassword, useUpdateAccount } from "@/lib/api/hooks";
 import { resendVerification, type AccountProfile } from "@/lib/savora-api";
 
@@ -190,12 +191,14 @@ export default function AccountProfilePage() {
   }
 
   return (
-    <PageShell>
-      <section className="section container" style={{ maxWidth: 720 }}>
-        <h1>Profile</h1>
-        <p className="section-sub">Keep your contact details up to date.</p>
-        <ProfileForms key={account.data.user.id} user={account.data.user} />
-      </section>
-    </PageShell>
+    <RoleGuard allow={["CUSTOMER", "ADMIN"]}>
+      <PageShell>
+        <section className="section container" style={{ maxWidth: 720 }}>
+          <h1>Profile</h1>
+          <p className="section-sub">Keep your contact details up to date.</p>
+          <ProfileForms key={account.data.user.id} user={account.data.user} />
+        </section>
+      </PageShell>
+    </RoleGuard>
   );
 }

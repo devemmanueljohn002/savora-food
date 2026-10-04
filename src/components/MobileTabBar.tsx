@@ -1,32 +1,72 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Heart, Home, Search, ShoppingCart, UserRound } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { Heart, Home, Search, ShoppingCart, UserRound, type LucideIcon } from "lucide-react";
 import CartCount from "./CartCount";
 import { useCurrentUser } from "@/lib/api/hooks";
+import { getAccountRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
 
 /**
  * Fixed bottom tab bar for mobile (Lovable-style). Hidden on desktop where
  * the full header nav is available. Mounted in PageShell after the footer.
+ *
+ * Role-aware: vendors/riders land on their own dashboard from Account and
+ * never see the consumer-only Cart/Saved tabs. The active tab is derived
+ * from the current pathname (+ dashboard tab query), so nested routes
+ * highlight the right tab.
  */
-export default function MobileTabBar() {
+function MobileTabs() {
   const pathname = usePathname();
-  const { data: currentUser } = useCurrentUser();
+  const searchParams = useSearchParams();
+  const { data: currentUser, isLoading } = useCurrentUser();
+  const role = isLoading ? undefined : (currentUser?.role ?? null);
+  const showConsumerTabs = usesConsumerTabs(role);
+  const accountHref = getAccountRouteForRole(role);
+  const dashboardTab = pathname === "/dashboard" ? (searchParams.get("tab") ?? "overview") : null;
 
-  const accountHref = currentUser ? "/account/profile" : "/auth";
+  const accountActive =
+    role === "VENDOR"
+      ? pathname.startsWith("/vendor")
+      : role === "DELIVERY_PARTNER"
+        ? pathname.startsWith("/rider")
+        : role === "ADMIN" || role === "SUPER_ADMIN"
+          ? pathname.startsWith("/admin") ||
+            pathname.startsWith("/super-admin") ||
+            pathname.startsWith("/account") ||
+            dashboardTab === "overview"
+          : pathname.startsWith("/account") || (dashboardTab !== null && dashboardTab !== "favorites");
 
-  const tabs = [
+  const tabs: Array<{
+    key: string;
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    active: boolean;
+    badge?: boolean;
+  }> = [
     { key: "home", label: "Home", href: "/", icon: Home, active: pathname === "/" },
     { key: "search", label: "Search", href: "/search", icon: Search, active: pathname.startsWith("/search") },
-    { key: "cart", label: "Cart", href: "/cart", icon: ShoppingCart, active: pathname.startsWith("/cart"), badge: true },
-    {
-      key: "saved",
-      label: "Saved",
-      href: "/dashboard?tab=favorites",
-      icon: Heart,
-      active: pathname.startsWith("/dashboard"),
-    },
+    ...(showConsumerTabs
+      ? [
+          {
+            key: "cart",
+            label: "Cart",
+            href: "/cart",
+            icon: ShoppingCart,
+            active: pathname.startsWith("/cart"),
+            badge: true,
+          },
+          {
+            key: "saved",
+            label: "Saved",
+            href: "/dashboard?tab=favorites",
+            icon: Heart,
+            active: dashboardTab === "favorites",
+          },
+        ]
+      : []),
     {
       // Stable key on purpose: the label flips between "Login" and "Account"
       // when the auth query resolves, and remounting the link mid-tap swallows
@@ -35,15 +75,7 @@ export default function MobileTabBar() {
       label: currentUser ? "Account" : "Login",
       href: accountHref,
       icon: UserRound,
-      active:
-        pathname.startsWith("/account") ||
-        pathname.startsWith("/vendor") ||
-        pathname.startsWith("/admin") ||
-        pathname.startsWith("/rider") ||
-        pathname.startsWith("/super-admin") ||
-        pathname.startsWith("/auth") ||
-        pathname.startsWith("/login") ||
-        pathname.startsWith("/register"),
+      active: accountActive,
     },
   ];
 
@@ -64,5 +96,13 @@ export default function MobileTabBar() {
         </Link>
       ))}
     </nav>
+  );
+}
+
+export default function MobileTabBar() {
+  return (
+    <Suspense>
+      <MobileTabs />
+    </Suspense>
   );
 }

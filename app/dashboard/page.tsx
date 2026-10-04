@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Heart, LogIn, Package, Receipt, UtensilsCrossed, Wallet } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import RoleGuard from "@/components/RoleGuard";
 import SignOutButton from "@/components/SignOutButton";
 import {
   useAccount,
@@ -615,8 +616,10 @@ function DashboardBody() {
 
 export default function DashboardPage() {
   return (
-    <Suspense>
-      <DashboardBody />
-    </Suspense>
+    <RoleGuard allow={["CUSTOMER", "ADMIN", "SUPER_ADMIN"]}>
+      <Suspense>
+        <DashboardBody />
+      </Suspense>
+    </RoleGuard>
   );
 }

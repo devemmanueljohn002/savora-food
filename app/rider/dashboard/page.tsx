@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { RiderShell, RiderSignIn, deliveryBadge, naira } from "@/components/RiderShell";
+import RoleGuard from "@/components/RoleGuard";
 import {
   useAcceptRiderJob,
   useDeclineRiderJob,
@@ -69,6 +70,7 @@ export default function RiderDashboardPage() {
   }
 
   return (
+    <RoleGuard allow={["DELIVERY_PARTNER", "ADMIN"]}>
     <RiderShell profile={me} title={`Hello, ${me.name.split(" ")[0]}`} sub="Accept jobs, deliver orders and track earnings.">
       <div className="row" style={{ marginBottom: 12 }}>
         <button className="btn" disabled={toggleOnline.isPending} onClick={toggle}>
@@ -198,6 +200,7 @@ export default function RiderDashboardPage() {
         </p>
       )}
     </RiderShell>
+    </RoleGuard>
   );
 }
 

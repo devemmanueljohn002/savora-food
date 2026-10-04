@@ -1,5 +1,6 @@
 import Link from "next/link";
 import NewsletterJoin from "./NewsletterJoin";
+import FooterRoleLinks from "./FooterRoleLinks";
 
 const MARKETPLACE_LINKS = [
   ["Food", "/food"],
@@ -14,9 +15,6 @@ const SUPPORT_LINKS = [
   ["About Savora Food", "/about"],
   ["Contact & Help", "/contact"],
   ["Track Order", "/track"],
-  ["My Orders", "/dashboard?tab=orders"],
-  ["Become a Vendor", "/partner"],
-  ["Ride with Savora", "/partner"],
 ];
 
 const SOCIALS: { label: string; icon: React.ReactNode }[] = [
@@ -91,6 +89,7 @@ export default function Footer() {
                 <Link href={href}>{label}</Link>
               </li>
             ))}
+            <FooterRoleLinks />
           </ul>
         </div>
         <div>
