@@ -94,6 +94,7 @@ import {
   quoteCheckout,
   quoteVendorCatering,
   rejectVendorOrder,
+  releaseRiderJob,
   removeCartItem,
   removeFavorite,
   requestVendorWithdrawal,
@@ -1054,10 +1055,10 @@ export function useUploadRiderDocument() {
   });
 }
 
-export function useRiderJobs() {
+export function useRiderJobs(params: { city?: string; page?: number; limit?: number } = {}) {
   return useQuery({
-    queryKey: riderKeys.jobs,
-    queryFn: listRiderJobs,
+    queryKey: [...riderKeys.jobs, params] as const,
+    queryFn: () => listRiderJobs(params),
     retry: false,
     staleTime: 15_000,
     refetchInterval: (data) => livePoll(data),
@@ -1081,6 +1082,17 @@ export function useDeclineRiderJob() {
     mutationFn: (orderId: string) => declineRiderJob(orderId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: riderKeys.jobs });
+    },
+  });
+}
+
+export function useReleaseRiderJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deliveryId: string) => releaseRiderJob(deliveryId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: riderKeys.jobs });
+      void queryClient.invalidateQueries({ queryKey: riderKeys.deliveries });
     },
   });
 }

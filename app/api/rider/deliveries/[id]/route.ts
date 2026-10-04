@@ -483,12 +483,8 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         pickedUp,
       });
     });
-    try {
-      const { createDispatchOffers } = await import("@/server/dispatch");
-      await createDispatchOffers(delivery.order_id);
-    } catch {
-      // ignore
-    }
+    // Open board: the released order reappears for every eligible rider
+    // on their next board poll — no targeted re-offer needed.
     if (vendorUserId) {
       await notifyWithEmail(vendorUserId, {
         title: `Delivery failed for ${delivery.order_number}`,

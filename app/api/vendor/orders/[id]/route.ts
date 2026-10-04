@@ -23,17 +23,12 @@ const actionSchema = z.object({
 });
 
 /**
- * Offer the ready order to the single best eligible rider. The dispatch
- * service notifies that rider (in-app + email); there is deliberately no
- * broadcast — riders can only accept a live offer addressed to them.
+ * Open board dispatch needs no per-order offer fan-out: a READY order
+ * appears on every eligible rider's board on their next poll, and unclaimed
+ * jobs escalate lazily via escalateUnclaimedJobs. Kept as a hook point.
  */
-async function offerRiderJob(orderId: string): Promise<void> {
-  try {
-    const { createDispatchOffers } = await import("@/server/dispatch");
-    await createDispatchOffers(orderId);
-  } catch {
-    // dispatch failure must never fail the vendor's advance action
-  }
+async function offerRiderJob(_orderId: string): Promise<void> {
+  return undefined;
 }
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {

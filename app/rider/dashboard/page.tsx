@@ -6,6 +6,7 @@ import RoleGuard from "@/components/RoleGuard";
 import {
   useAcceptRiderJob,
   useDeclineRiderJob,
+  useReleaseRiderJob,
   useRiderDeliveries,
   useRiderDeliveryAction,
   useRiderEarnings,
@@ -13,22 +14,91 @@ import {
   useRiderProfile,
   useUpdateRiderProfile,
 } from "@/lib/api/hooks";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { BoardJob } from "@/lib/savora-api";
 
-/** Live mm:ss countdown to an offer expiry. Ticks locally; the list refetch
- *  (jobs feed polls) removes expired/taken cards once the server agrees. */
-function OfferCountdown({ expiresAt }: { expiresAt: string }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const left = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
-  const text = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+function ageLabel(minutes: number): string {
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m ago`;
+}
+
+function dropAreaLabel(job: BoardJob): string {
+  const parts = [job.dropArea.zone, job.dropArea.city].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "Nearby";
+}
+
+/** Tapping a card reveals the pre-claim detail, then Accept. The detail
+ *  never contains customer identity or full addresses (server-enforced). */
+function JobCard({
+  job,
+  hasActiveJob,
+  accepting,
+  dismissing,
+  onAccept,
+  onDismiss,
+}: {
+  job: BoardJob;
+  hasActiveJob: boolean;
+  accepting: boolean;
+  dismissing: boolean;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <strong className={left <= 15 ? "price" : undefined} aria-live="polite">
-      {text}
-    </strong>
+    <div className="card card-body">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        style={{
+          all: "unset",
+          display: "block",
+          width: "100%",
+          cursor: "pointer",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="row">
+          <div>
+            <strong>{job.vendor.name}</strong>
+            {job.vendor.area ? <span className="muted"> · {job.vendor.area}</span> : null}
+            {job.boosted && <span className="badge badge-warning" style={{ marginLeft: 8 }}>Boosted pay</span>}
+            <p className="muted" style={{ margin: "4px 0 0" }}>
+              Drop-off: {dropAreaLabel(job)} · {job.itemCount} item{job.itemCount === 1 ? "" : "s"} ·{" "}
+              {ageLabel(job.ageMinutes)}
+            </p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <span className="muted" style={{ display: "block", fontSize: 12 }}>
+              Rider payout
+            </span>
+            <strong className="price">{naira(job.payout)}</strong>
+          </div>
+        </div>
+      </button>
+      {expanded && (
+        <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <p className="muted" style={{ margin: "0 0 4px" }}>
+            Order {job.orderNumber} · Pickup: {job.vendor.name}
+            {job.vendor.area ? ` (${job.vendor.area})` : ""} · Drop-off area: {dropAreaLabel(job)}
+          </p>
+          <p className="muted" style={{ margin: "0 0 12px" }}>
+            Full pickup and drop-off details are revealed after you accept.
+          </p>
+          <span style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-sm" disabled={accepting || hasActiveJob} onClick={onAccept}>
+              {accepting ? "Accepting…" : hasActiveJob ? "Finish current first" : "Accept job"}
+            </button>
+            <button className="btn secondary btn-sm" disabled={dismissing} onClick={onDismiss}>
+              Not interested
+            </button>
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -39,6 +109,7 @@ export default function RiderDashboardPage() {
   const earnings = useRiderEarnings();
   const accept = useAcceptRiderJob();
   const decline = useDeclineRiderJob();
+  const release = useReleaseRiderJob();
   const toggleOnline = useUpdateRiderProfile();
   const [error, setError] = useState("");
 
@@ -68,7 +139,14 @@ export default function RiderDashboardPage() {
     try {
       await accept.mutateAsync(orderId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not accept this job.");
+      const message = reason instanceof Error ? reason.message : "Could not accept this job.";
+      // 409 from a lost claim race: say so kindly and refresh the board.
+      if (/already taken/i.test(message)) {
+        setError("Another rider took this job — refreshing the list.");
+        void jobs.refetch();
+      } else {
+        setError(message);
+      }
     }
   }
 
@@ -90,7 +168,7 @@ export default function RiderDashboardPage() {
   }
 
   return (
-    <RoleGuard allow={["DELIVERY_PARTNER", "ADMIN"]}>
+    <RoleGuard allow={["DELIVERY_PARTNER"]}>
     <RiderShell profile={me} title={`Hello, ${me.name.split(" ")[0]}`} sub="Accept jobs, deliver orders and track earnings.">
       <div className="row" style={{ marginBottom: 12 }}>
         <button className="btn" disabled={toggleOnline.isPending} onClick={toggle}>
@@ -143,7 +221,18 @@ export default function RiderDashboardPage() {
         </>
       )}
 
-      <h2 style={{ marginTop: 32 }}>Available jobs</h2>
+      <div className="row" style={{ marginTop: 32 }}>
+        <h2 style={{ margin: 0 }}>Available jobs</h2>
+        <button
+          className="btn secondary btn-sm"
+          type="button"
+          disabled={jobs.isFetching}
+          onClick={() => void jobs.refetch()}
+          aria-label="Refresh available jobs"
+        >
+          {jobs.isFetching ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
       {!online ? (
         <div className="empty-state">
           <p className="empty-state-title">You are offline</p>
@@ -156,7 +245,15 @@ export default function RiderDashboardPage() {
           <Link className="btn" href="/rider/profile">Complete verification</Link>
         </div>
       ) : jobs.isLoading ? (
-        <p className="muted">Loading jobs…</p>
+        <div className="grid" style={{ gridTemplateColumns: "1fr" }} aria-label="Loading jobs">
+          {[0, 1, 2].map((key) => (
+            <div className="card card-body" key={key}>
+              <div className="skeleton" style={{ height: 18, width: "55%", marginBottom: 10 }} />
+              <div className="skeleton" style={{ height: 14, width: "80%", marginBottom: 6 }} />
+              <div className="skeleton" style={{ height: 14, width: "40%" }} />
+            </div>
+          ))}
+        </div>
       ) : jobs.isError ? (
         <div className="empty-state">
           <p className="empty-state-title">Couldn&apos;t load jobs</p>
@@ -176,50 +273,15 @@ export default function RiderDashboardPage() {
       ) : (
         <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
           {jobs.data?.map((job) => (
-            <div className="card card-body" key={job.id}>
-              <p className="muted" style={{ margin: "0 0 4px", textTransform: "uppercase", fontSize: 12 }}>
-                Delivery request · <OfferCountdown expiresAt={job.offerExpiresAt ?? job.createdAt} />
-              </p>
-              <div className="row">
-                <div>
-                  <strong>{job.orderNumber}</strong>
-                  <p className="muted" style={{ margin: "4px 0 0" }}>
-                    Pickup: {job.vendor.name}
-                    {job.pickupZone ? ` (${job.pickupZone})` : ""}
-                  </p>
-                  <p className="muted" style={{ margin: "4px 0 0" }}>
-                    Drop-off:{" "}
-                    {job.address
-                      ? `${job.address.fullAddress}${job.address.city ? `, ${job.address.city}` : ""}`
-                      : "See details after accepting"}
-                  </p>
-                  <p className="muted" style={{ margin: "4px 0 0" }}>
-                    {job.itemCount} item{job.itemCount === 1 ? "" : "s"}
-                    {job.offerExpiresAt
-                      ? ` · offer expires ${new Date(job.offerExpiresAt).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" })}`
-                      : ""}
-                  </p>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={{ margin: "0 0 8px" }}>
-                    <span className="muted" style={{ display: "block", fontSize: 12 }}>Earnings</span>
-                    <strong className="price">{naira(job.earnings ?? job.deliveryFee)}</strong>
-                  </p>
-                  <span style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button className="btn btn-sm" disabled={accept.isPending || !!current} onClick={() => takeJob(job.id)}>
-                      {accept.isPending ? "Accepting…" : current ? "Finish current first" : "Accept"}
-                    </button>
-                    <button
-                      className="btn secondary btn-sm"
-                      disabled={decline.isPending}
-                      onClick={() => passJob(job.id)}
-                    >
-                      Decline
-                    </button>
-                  </span>
-                </div>
-              </div>
-            </div>
+            <JobCard
+              key={job.id}
+              job={job}
+              hasActiveJob={!!current}
+              accepting={accept.isPending}
+              onAccept={() => takeJob(job.id)}
+              onDismiss={() => passJob(job.id)}
+              dismissing={decline.isPending}
+            />
           ))}
         </div>
       )}
@@ -235,8 +297,10 @@ export default function RiderDashboardPage() {
 
 function ActiveDeliveryCard({ deliveryId, status, requireOtp }: { deliveryId: string; status: string; requireOtp: boolean }) {
   const action = useRiderDeliveryAction(deliveryId);
+  const releaseJob = useReleaseRiderJob();
   const [error, setError] = useState("");
   const [otp, setOtp] = useState("");
+  const releasable = ["ASSIGNED", "GOING_TO_VENDOR", "ARRIVED_AT_VENDOR"].includes(status);
 
   async function run(next: "going" | "arrived" | "pickup" | "in_transit" | "deliver") {
     setError("");
@@ -245,6 +309,16 @@ function ActiveDeliveryCard({ deliveryId, status, requireOtp }: { deliveryId: st
       setOtp("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Action failed.");
+    }
+  }
+
+  async function release() {
+    setError("");
+    if (!window.confirm("Release this job back to the board? Only do this before pickup.")) return;
+    try {
+      await releaseJob.mutateAsync(deliveryId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not release this job.");
     }
   }
 
@@ -287,6 +361,11 @@ function ActiveDeliveryCard({ deliveryId, status, requireOtp }: { deliveryId: st
             {action.isPending ? "Updating…" : "Mark delivered"}
           </button>
         </>
+      )}
+      {releasable && (
+        <button className="btn secondary btn-sm" disabled={releaseJob.isPending} onClick={() => void release()}>
+          {releaseJob.isPending ? "Releasing…" : "Release job"}
+        </button>
       )}
       {error && <span className="auth-error">{error}</span>}
     </span>

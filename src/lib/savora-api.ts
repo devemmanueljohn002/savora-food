@@ -1325,36 +1325,50 @@ export function uploadRiderDocument(input: { kind: string; url: string }) {
   return apiSend<RiderDocument>("/rider/documents", "POST", input).then((result) => result.data);
 }
 
-export type RiderJob = {
+export type BoardJob = {
   id: string;
   orderNumber: string;
-  total: number;
-  deliveryFee: number;
-  earnings: number;
   itemCount: number;
   createdAt: string;
-  offerId: string | null;
-  offerExpiresAt: string | null;
-  offered: boolean;
-  vendor: { name: string; slug: string };
-  pickupZone: string | null;
-  address: { fullAddress: string; city: string | null; state: string | null } | null;
+  ageMinutes: number;
+  payout: number;
+  boosted: boolean;
+  vendor: { name: string; slug: string; area: string | null };
+  dropArea: { city: string | null; zone: string | null };
+  distanceKm: number | null;
+  etaMinutes: number | null;
 };
 
-export function listRiderJobs() {
-  return apiGet<RiderJob[]>("/rider/jobs").then((result) => result.data);
+export function listRiderJobs(params: { city?: string; page?: number; limit?: number } = {}) {
+  return apiGet<BoardJob[]>(`/rider/jobs${queryString(params)}`).then((result) => result.data);
 }
 
 export function acceptRiderJob(orderId: string) {
-  return apiSend<{ deliveryId: string; orderId: string }>("/rider/jobs/accept", "POST", { orderId }).then(
+  return apiSend<BoardClaimDetail>("/rider/jobs/accept", "POST", { orderId }).then(
     (result) => result.data,
   );
 }
 
+export type BoardClaimDetail = {
+  deliveryId: string;
+  orderId: string;
+  orderNumber: string;
+  payout: number;
+  vendor: { name: string; phone: string | null; address: string | null; city: string | null };
+  drop: { fullAddress: string; city: string | null; state: string | null; phone: string | null };
+  items: { name: string; quantity: number }[];
+};
+
 export function declineRiderJob(orderId: string) {
-  return apiSend<{ declined: boolean }>("/rider/jobs/decline", "POST", { orderId }).then(
+  return apiSend<{ dismissed: boolean }>("/rider/jobs/decline", "POST", { orderId }).then(
     (result) => result.data,
   );
+}
+
+export function releaseRiderJob(deliveryId: string) {
+  return apiSend<{ released: boolean; orderId: string }>("/rider/jobs/release", "POST", {
+    deliveryId,
+  }).then((result) => result.data);
 }
 
 export function postRiderLocation(input: {

@@ -413,22 +413,25 @@ export async function creditRiderDeliveryTx(
   requireDeliveryConfirmed(input.confirmed);
   const owner: Owner = { type: "RIDER", id: input.riderId };
 
-  const orders = await tx<{ delivery_fee: string }[]>`
-    SELECT delivery_fee::text AS delivery_fee FROM orders WHERE id = ${input.orderId} LIMIT 1
+  const orders = await tx<{ delivery_fee: string; payout_bonus: string | null }[]>`
+    SELECT delivery_fee::text AS delivery_fee, COALESCE(payout_bonus, 0)::text AS payout_bonus FROM orders WHERE id = ${input.orderId} LIMIT 1
   `;
   if (!orders[0]) throw ApiError.notFound("Order not found.");
   const feeKobo = computeRiderFeeKobo(Number(orders[0].delivery_fee), await getRiderSharePct());
+  // Platform-funded escalation bonus (board model): added once, frozen with the fee.
+  const bonusKobo = Math.max(0, Math.round(Number(orders[0].payout_bonus ?? 0) * 100));
+  const totalKobo = feeKobo + bonusKobo;
 
   await ensureWalletTx(tx, owner);
   // Freeze the fee on first completion; never recalculate afterwards.
   await tx`
-    UPDATE deliveries SET rider_fee_kobo = COALESCE(rider_fee_kobo, ${feeKobo})
+    UPDATE deliveries SET rider_fee_kobo = COALESCE(rider_fee_kobo, ${totalKobo})
     WHERE id = ${input.deliveryId}
   `;
   const stored = await tx<{ rider_fee_kobo: string }[]>`
     SELECT rider_fee_kobo::text AS rider_fee_kobo FROM deliveries WHERE id = ${input.deliveryId} LIMIT 1
   `;
-  const frozenKobo = Number(stored[0]?.rider_fee_kobo ?? feeKobo);
+  const frozenKobo = Number(stored[0]?.rider_fee_kobo ?? totalKobo);
 
   let credited = false;
   if (frozenKobo > 0) {
