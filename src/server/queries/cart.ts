@@ -22,6 +22,7 @@ type ProductAvailability = {
   is_active: boolean;
   availability: boolean;
   vendor_status: string;
+  vendor_open: boolean | null;
 };
 
 function toCartItem(row: CartProductRow): CartItemView {
@@ -96,7 +97,7 @@ export async function getCartView(userId: string): Promise<CartView> {
 export async function assertPurchasable(productId: string): Promise<void> {
   const sql = db();
   const rows = await sql<ProductAvailability[]>`
-    SELECT p.id, p.is_active, p.availability, v.status AS vendor_status
+    SELECT p.id, p.is_active, p.availability, v.status AS vendor_status, v.is_open AS vendor_open
     FROM products p
     JOIN vendors v ON v.id = p.vendor_id
     WHERE p.id = ${productId}
@@ -111,6 +112,9 @@ export async function assertPurchasable(productId: string): Promise<void> {
   }
   if (product.vendor_status !== "APPROVED") {
     throw ApiError.notFound("That vendor is not currently accepting orders.");
+  }
+  if (product.vendor_open === false) {
+    throw ApiError.notFound("That vendor is currently closed. Please try again later.");
   }
 }
 

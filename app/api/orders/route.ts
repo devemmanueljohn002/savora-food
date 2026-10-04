@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireCustomer } from "@/server/auth/guard";
-import { listOrdersForUser } from "@/server/orders";
+import { expireStalePendingPayments, listOrdersForUser } from "@/server/orders";
 
 const querySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { page, limit } = parsed.data;
+    await expireStalePendingPayments(user.id, 20).catch(() => undefined);
     const result = await listOrdersForUser(user.id, page, limit);
     return NextResponse.json(
       ok(result.items, {

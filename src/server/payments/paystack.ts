@@ -30,8 +30,12 @@ type PaystackEnvelope = {
   data: PaystackData;
 };
 
-async function paystackFetch(path: string, init: RequestInit = {}): Promise<{ status: number; body: PaystackEnvelope }> {
+async function paystackFetch(
+  path: string,
+  init: RequestInit & { fetchImpl?: FetchImpl } = {},
+): Promise<{ status: number; body: PaystackEnvelope }> {
   const secret = requireSecretKey();
+  const fetchImpl = init.fetchImpl ?? fetch;
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${secret}`);
   headers.set("Accept", "application/json");
@@ -39,7 +43,8 @@ async function paystackFetch(path: string, init: RequestInit = {}): Promise<{ st
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${PAYSTACK_API}${path}`, { ...init, headers });
+  const { fetchImpl: _ignored, ...fetchInit } = init;
+  const response = await fetchImpl(`${PAYSTACK_API}${path}`, { ...fetchInit, headers });
   const body = (await response.json().catch(() => null)) as Partial<PaystackEnvelope> | null;
 
   if (!response.ok || !body || body.status === false) {
@@ -49,6 +54,8 @@ async function paystackFetch(path: string, init: RequestInit = {}): Promise<{ st
 
   return { status: response.status, body: body as PaystackEnvelope };
 }
+
+export type FetchImpl = typeof fetch;
 
 export type PaystackInitializeArgs = {
   amountNaira: number;
@@ -137,4 +144,43 @@ export async function markPaymentFailed(reference: string): Promise<void> {
     SET status = 'FAILED'
     WHERE payment_reference = ${reference} AND status = 'PENDING'
   `;
+}
+
+export type RefundPaystackResult = {
+  status: string;
+  refundReference: string | null;
+};
+
+/**
+ * Real money-out refund via Paystack (`POST /refund`). Full-order refunds
+ * pass no amount (Paystack refunds the transaction total).
+ * Throws ApiError PAYMENT_ERROR when Paystack rejects — callers record the
+ * failure on the refunds row so support can follow up manually.
+ */
+export async function refundPaystackTransaction(
+  input: { reference: string; amountKobo?: number | null },
+  fetchImpl?: FetchImpl,
+): Promise<RefundPaystackResult> {
+  const body: Record<string, unknown> = { transaction: input.reference };
+  if (input.amountKobo !== undefined && input.amountKobo !== null) {
+    if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) {
+      throw ApiError.validation("Invalid refund amount.");
+    }
+    body.amount = input.amountKobo;
+  }
+  const { body: envelope } = await paystackFetch("/refund", {
+    method: "POST",
+    body: JSON.stringify(body),
+    fetchImpl,
+  });
+  const data = (envelope?.data ?? {}) as { status?: unknown; refund_reference?: unknown; reference?: unknown };
+  return {
+    status: typeof data.status === "string" ? data.status : "unknown",
+    refundReference:
+      typeof data.refund_reference === "string"
+        ? data.refund_reference
+        : typeof data.reference === "string"
+          ? data.reference
+          : null,
+  };
 }

@@ -160,6 +160,13 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     const delivery = rows[0];
     if (!delivery) throw ApiError.notFound("Delivery not found.");
 
+    // The order may have been cancelled (or closed) after assignment — e.g.
+    // vendor cancel voids the delivery, but a stale client may still act.
+    // Never advance, pick up, or complete a closed order.
+    if (["CANCELLED", "DELIVERED", "REFUNDED"].includes(delivery.order_status)) {
+      throw ApiError.conflict("This order is already closed.");
+    }
+
     const vendorOwners = await sql<{ user_id: string }[]>`
       SELECT user_id FROM vendors WHERE id = ${delivery.vendor_id} LIMIT 1
     `;
@@ -237,6 +244,11 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     if (parsed.data.action === "in_transit") {
       if (delivery.status !== "PICKED_UP") throw ApiError.conflict("Pick up the order first.");
       await sql`UPDATE deliveries SET status = 'IN_TRANSIT', tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
+      await notifyWithEmail(delivery.customer_id, {
+        title: `Order ${delivery.order_number} is on its way to you`,
+        body: `${rider.name} is heading your way with your order. Have your delivery code ready.`,
+        data: { orderId: delivery.order_id, status: "IN_TRANSIT" },
+      });
       return NextResponse.json(ok({ status: "IN_TRANSIT" }));
     }
 
@@ -474,6 +486,11 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         data: { orderId: delivery.order_id, status: "FAILED" },
       });
     }
+    await notifyWithEmail(delivery.customer_id, {
+      title: `Order ${delivery.order_number} needs a new rider`,
+      body: "Your rider could not complete this delivery. Your order went back to the queue and another rider will be assigned shortly — no need to reorder.",
+      data: { orderId: delivery.order_id, status: "READY_FOR_PICKUP" },
+    });
     return NextResponse.json(
       ok({
         status: "FAILED",

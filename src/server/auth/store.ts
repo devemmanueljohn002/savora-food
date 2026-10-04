@@ -319,6 +319,7 @@ export type VendorRow = {
   bank_name: string | null;
   bank_account_name: string | null;
   bank_account_number: string | null;
+  is_open: boolean | null;
   status: string;
   commission_rate: string | null;
   rating_average: string | null;

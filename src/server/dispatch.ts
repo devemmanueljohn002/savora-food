@@ -25,6 +25,7 @@ export type DispatchOrder = {
   order_number: string;
   vendor_id: string;
   vendor_user_id: string | null;
+  customer_user_id: string | null;
   vendor_name: string;
   city: string | null;
   delivery_zone: string | null;
@@ -151,13 +152,14 @@ export async function getDispatchOrder(orderId: string): Promise<DispatchOrder |
     order_number: string;
     vendor_id: string;
     vendor_user_id: string | null;
+    customer_user_id: string | null;
     vendor_name: string;
     city: string | null;
     delivery_zone: string | null;
     vendor_zone: string | null;
     delivery_fee: string;
   }[]>`
-    SELECT o.id, o.order_number, o.vendor_id, v.user_id AS vendor_user_id, v.business_name AS vendor_name,
+    SELECT o.id, o.order_number, o.vendor_id, v.user_id AS vendor_user_id, o.user_id AS customer_user_id, v.business_name AS vendor_name,
            a.city, a.delivery_zone, v.delivery_zone AS vendor_zone, o.delivery_fee::text
     FROM orders o
     JOIN vendors v ON v.id = o.vendor_id
@@ -171,6 +173,7 @@ export async function getDispatchOrder(orderId: string): Promise<DispatchOrder |
     order_number: row.order_number,
     vendor_id: row.vendor_id,
     vendor_user_id: row.vendor_user_id,
+    customer_user_id: row.customer_user_id,
     vendor_name: row.vendor_name,
     city: row.city,
     delivery_zone: row.delivery_zone,
@@ -217,6 +220,10 @@ export async function findEligibleRiders(order: DispatchOrder, limit = 1): Promi
 export async function createDispatchOffers(orderId: string): Promise<number> {
   const sql = db();
   const config = await getDispatchConfig();
+  // Set inside the transaction when THIS run newly exhausts the order.
+  // Retries of an already-UNASSIGNED order never re-escalate (the vendor and
+  // admins were already told once) and never duplicate the history note.
+  let escalate = false;
   const offered = await sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext(${`dispatch:${orderId}`}))`;
     const orders = await tx<{ status: string; dispatch_status: string }[]>`
@@ -224,6 +231,7 @@ export async function createDispatchOffers(orderId: string): Promise<number> {
     `;
     const current = orders[0];
     if (!current || current.status !== "READY_FOR_PICKUP") return 0;
+    const wasUnassigned = current.dispatch_status === "UNASSIGNED";
     if (current.dispatch_status === "ASSIGNED") {
       // Stale marker from a failed delivery that released the order back.
       await tx`
@@ -245,8 +253,13 @@ export async function createDispatchOffers(orderId: string): Promise<number> {
       SELECT MAX(attempt_no) AS max_attempt FROM delivery_offers WHERE order_id = ${orderId}
     `;
     const attempt = (attemptRows[0]?.max_attempt ?? 0) + 1;
-    if (attempt > config.maxAttempts) {
+    // UNASSIGNED orders get retried when never-offered riders appear (the
+    // eligibility filter below excludes previously-offered riders), so a new
+    // rider pool can still pick the order up. Escalation fires only on the
+    // transition into UNASSIGNED, never on retries.
+    if (attempt > config.maxAttempts && !wasUnassigned) {
       await markUnassignedTx(tx, orderId, "No rider available after maximum dispatch attempts");
+      escalate = true;
       return -1;
     }
 
@@ -254,8 +267,9 @@ export async function createDispatchOffers(orderId: string): Promise<number> {
     if (!full) return 0;
     const [rider] = await findEligibleRiders(full, 1);
     if (!rider) {
-      if (attempt >= config.maxAttempts) {
+      if (!wasUnassigned && attempt >= config.maxAttempts) {
         await markUnassignedTx(tx, orderId, "No eligible riders after maximum dispatch attempts");
+        escalate = true;
         return -1;
       }
       return 0;
@@ -301,18 +315,21 @@ export async function createDispatchOffers(orderId: string): Promise<number> {
       // notification failure must never fail the offer itself
     }
   }
-  if (offered === -1) {
+  if (offered === -1 && escalate) {
     await escalateUnassigned(orderId).catch(() => undefined);
   }
   return offered === 1 ? 1 : 0;
 }
 
-/** Terminal escalation inside the dispatch transaction. */
+/** Terminal escalation inside the dispatch transaction. Writes the history
+ *  note only when the row actually transitions (retries are silent). */
 async function markUnassignedTx(tx: Tx, orderId: string, note: string): Promise<void> {
-  await tx`
+  const updated = await tx<{ id: string }[]>`
     UPDATE orders SET dispatch_status = 'UNASSIGNED', updated_at = NOW()
     WHERE id = ${orderId} AND dispatch_status <> 'UNASSIGNED'
+    RETURNING id
   `;
+  if (updated.length === 0) return;
   await tx`
     INSERT INTO order_status_history (order_id, status, note)
     VALUES (${orderId}, 'READY_FOR_PICKUP', ${note})
@@ -332,6 +349,13 @@ async function escalateUnassigned(orderId: string): Promise<void> {
   };
   if (full.vendor_user_id) {
     await notifyWithEmail(full.vendor_user_id, message).catch(() => undefined);
+  }
+  if (full.customer_user_id) {
+    await notifyWithEmail(full.customer_user_id, {
+      title: `Finding a rider for ${full.order_number}`,
+      body: `Your order is ready and we're looking for an available rider. We'll notify you the moment one accepts. Thank you for your patience.`,
+      data: { orderId, status: "UNASSIGNED" },
+    }).catch(() => undefined);
   }
   const admins = await db()<{ user_id: string }[]>`
     SELECT u.id AS user_id FROM users u WHERE u.role IN ('ADMIN', 'SUPER_ADMIN') LIMIT 10

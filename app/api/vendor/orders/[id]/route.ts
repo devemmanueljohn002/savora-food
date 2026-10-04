@@ -176,7 +176,16 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         );
       }
       await sql.begin(async (tx) => {
-        await tx`UPDATE orders SET status = 'VENDOR_ACCEPTED', updated_at = NOW() WHERE id = ${id}`;
+        // Guarded write: a concurrent accept/reject wins the row; the loser
+        // gets zero rows back instead of double-processing the order.
+        const updated = await tx<{ id: string }[]>`
+          UPDATE orders SET status = 'VENDOR_ACCEPTED', updated_at = NOW()
+          WHERE id = ${id} AND status = 'PAID'
+          RETURNING id
+        `;
+        if (updated.length === 0) {
+          throw ApiError.conflict("This order changed while you were reviewing it. Please refresh.");
+        }
         await tx`
           INSERT INTO order_status_history (order_id, status, note, created_by)
           VALUES (${id}, 'VENDOR_ACCEPTED', ${parsed.data.note ?? "Vendor accepted the order"}, ${session.id})
@@ -201,41 +210,39 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       const reason = parsed.data.note ?? "Rejected by vendor";
       const { releaseCouponForOrder } = await import("@/server/orders");
       await sql.begin(async (tx) => {
-        await tx`UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+        // Guarded write: see accept above — concurrent reject/cancel loses.
+        const updated = await tx<{ id: string }[]>`
+          UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW()
+          WHERE id = ${id} AND status = ${order.status}
+          RETURNING id
+        `;
+        if (updated.length === 0) {
+          throw ApiError.conflict("This order changed while you were reviewing it. Please refresh.");
+        }
         await tx`UPDATE delivery_offers SET status = 'CANCELLED' WHERE order_id = ${id} AND status = 'OFFERED'`;
+        // Defensive: no open delivery can exist at PAID/VENDOR_ACCEPTED, but
+        // void one anyway so a stale row can never resurrect this order.
+        await tx`UPDATE deliveries SET status = 'CANCELLED' WHERE order_id = ${id} AND status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note, created_by)
           VALUES (${id}, 'CANCELLED', ${reason}, ${session.id})
         `;
       });
       await releaseCouponForOrder(id).catch(() => undefined);
-      // Refund ledger (best-effort): refunds row + REFUND transaction with reference ID.
-      try {
-        const { generateTxReference, recordTransactions } = await import("@/server/money");
-        const totals = await sql<{ total: string }[]>`SELECT total::text AS total FROM orders WHERE id = ${id} LIMIT 1`;
-        const payRows = await sql<{ id: string }[]>`SELECT id FROM payments WHERE order_id = ${id} ORDER BY created_at DESC LIMIT 1`;
-        const amount = Number(totals[0]?.total ?? 0);
-        if (amount > 0) {
-          const reference = generateTxReference("RF");
-          await sql`
-            INSERT INTO refunds (order_id, payment_id, reference, amount, reason, status)
-            VALUES (${id}, ${payRows[0]?.id ?? null}, ${reference}, ${amount}, ${reason}, 'PROCESSED')
-            ON CONFLICT (reference) DO NOTHING
-          `;
-          await recordTransactions({
-            orderId: id,
-            paymentId: payRows[0]?.id ?? null,
-            entries: [{ kind: "REFUND", amount, meta: { reference, reason } }],
-          });
-        }
-      } catch {
-        // ignore ledger failures on reject path
-      }
+      const { restoreStockForOrder } = await import("@/server/orders");
+      await restoreStockForOrder(id).catch(() => undefined);
+      // Real money-out refund via Paystack (best-effort, recorded in ledger).
+      const { refundOrderPayment } = await import("@/server/refunds");
+      const refund = await refundOrderPayment(id, reason);
+      const refundLine =
+        refund.attempted && refund.processed
+          ? "Your payment has been refunded."
+          : "Your payment will be refunded. If it does not arrive within a few days, contact support.";
       await notifyUser({
         userId: order.user_id,
         type: "ORDER",
         title: `Order ${order.order_number} rejected`,
-        body: `${vendor.business_name} could not fulfil your order. Your payment will be refunded.${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""}`,
+        body: `${vendor.business_name} could not fulfil your order. ${refundLine}${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""}`,
         data: { orderId: id, status: "CANCELLED" },
       });
       return NextResponse.json(ok({ status: "CANCELLED" }));
@@ -251,7 +258,15 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         );
       }
       await sql.begin(async (tx) => {
-        await tx`UPDATE orders SET status = ${next}, updated_at = NOW() WHERE id = ${id}`;
+        // Guarded write: concurrent advances lose instead of double-logging.
+        const updated = await tx<{ id: string }[]>`
+          UPDATE orders SET status = ${next}, updated_at = NOW()
+          WHERE id = ${id} AND status = ${order.status}
+          RETURNING id
+        `;
+        if (updated.length === 0) {
+          throw ApiError.conflict("This order changed while you were updating it. Please refresh.");
+        }
         await tx`
           INSERT INTO order_status_history (order_id, status, note, created_by)
           VALUES (${id}, ${next}, ${parsed.data.note ?? `Vendor moved order to ${next.replaceAll("_", " ")}`}, ${session.id})
@@ -278,9 +293,30 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
     const rejected = order.status === "PAID";
     const reason = parsed.data.note ?? (rejected ? "Rejected by vendor" : "Cancelled by vendor");
+    // A live delivery may exist (cancel is allowed while RIDER_ASSIGNED).
+    // Void it so a later rider action cannot resurrect this cancelled order.
+    const openDeliveries = await sql<{ delivery_id: string; rider_user_id: string | null }[]>`
+      SELECT d.id AS delivery_id, dp.user_id AS rider_user_id
+      FROM deliveries d
+      JOIN delivery_partners dp ON dp.id = d.delivery_partner_id
+      WHERE d.order_id = ${id} AND d.status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+      LIMIT 1
+    `;
+    const openDelivery = openDeliveries[0] ?? null;
     await sql.begin(async (tx) => {
-      await tx`UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+      // Guarded write: concurrent cancel/reject loses instead of double-processing.
+      const updated = await tx<{ id: string }[]>`
+        UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW()
+        WHERE id = ${id} AND status = ${order.status}
+        RETURNING id
+      `;
+      if (updated.length === 0) {
+        throw ApiError.conflict("This order changed while you were updating it. Please refresh.");
+      }
       await tx`UPDATE delivery_offers SET status = 'CANCELLED' WHERE order_id = ${id} AND status = 'OFFERED'`;
+      if (openDelivery) {
+        await tx`UPDATE deliveries SET status = 'CANCELLED' WHERE id = ${openDelivery.delivery_id} AND status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')`;
+      }
       await tx`
         INSERT INTO order_status_history (order_id, status, note, created_by)
         VALUES (${id}, 'CANCELLED', ${reason}, ${session.id})
@@ -296,15 +332,30 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         `;
       }
     });
+    // Cancelled after payment: refund for real (best-effort, recorded).
+    // Unpaid cancels have no SUCCESS payment, so this is a no-op for them.
+    const { refundOrderPayment } = await import("@/server/refunds");
+    await refundOrderPayment(id, reason);
+    const { restoreStockForOrder } = await import("@/server/orders");
+    await restoreStockForOrder(id).catch(() => undefined);
     await notifyUser({
       userId: order.user_id,
       type: "ORDER",
       title: rejected ? `Order ${order.order_number} rejected` : `Order ${order.order_number} cancelled`,
       body: rejected
         ? `${vendor.business_name} could not accept your order.${parsed.data.note ? ` Reason: ${parsed.data.note}` : " You have not been charged further; contact support if you already paid."}`
-        : `${vendor.business_name} cancelled your order.${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""}`,
+        : `${vendor.business_name} cancelled your order.${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""} Your payment will be refunded. If it does not arrive within a few days, contact support.`,
       data: { orderId: id, status: "CANCELLED", rejected },
     });
+    if (openDelivery?.rider_user_id) {
+      await notifyUser({
+        userId: openDelivery.rider_user_id,
+        type: "ORDER",
+        title: `Order ${order.order_number} cancelled by vendor`,
+        body: "The vendor cancelled this order. Your delivery was closed — look out for new jobs.",
+        data: { orderId: id, status: "CANCELLED" },
+      }).catch(() => undefined);
+    }
     return NextResponse.json(ok({ status: "CANCELLED" }));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);

@@ -18,6 +18,7 @@ const profileSchema = z.object({
   bankName: z.string().trim().max(150).optional().nullable(),
   bankAccountName: z.string().trim().max(150).optional().nullable(),
   bankAccountNumber: z.string().trim().max(50).optional().nullable(),
+  isOpen: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
         bankName: vendor.bank_name,
         bankAccountName: vendor.bank_account_name,
         bankAccountNumber: vendor.bank_account_number,
+        isOpen: vendor.is_open ?? true,
         hasProfilePhoto: vendor.profile_photo_key != null,
         status: vendor.status,
         commissionRate: vendor.commission_rate === null ? null : Number(vendor.commission_rate),
@@ -78,7 +80,9 @@ export async function PATCH(request: NextRequest) {
     });
     if (!vendor) throw ApiError.notFound("No vendor profile found for this account.");
 
-    // Bank + branding fields live outside the shared onboarding updater.
+    // Bank + branding + open-flag fields live outside the shared onboarding updater.
+    // isOpen is always a real boolean here (never an untyped null), so the
+    // parameter stays type-safe for Postgres.
     const d = parsed.data;
     const rows = await db()<{
       logo_url: string | null;
@@ -86,6 +90,7 @@ export async function PATCH(request: NextRequest) {
       bank_name: string | null;
       bank_account_name: string | null;
       bank_account_number: string | null;
+      is_open: boolean;
     }[]>`
       UPDATE vendors SET
         logo_url = ${d.logoUrl === undefined ? vendor.logo_url : d.logoUrl},
@@ -93,9 +98,10 @@ export async function PATCH(request: NextRequest) {
         bank_name = ${d.bankName === undefined ? vendor.bank_name : d.bankName},
         bank_account_name = ${d.bankAccountName === undefined ? vendor.bank_account_name : d.bankAccountName},
         bank_account_number = ${d.bankAccountNumber === undefined ? vendor.bank_account_number : d.bankAccountNumber},
+        is_open = ${d.isOpen === undefined ? vendor.is_open ?? true : d.isOpen},
         updated_at = NOW()
       WHERE id = ${vendor.id}
-      RETURNING logo_url, banner_image_url, bank_name, bank_account_name, bank_account_number
+      RETURNING logo_url, banner_image_url, bank_name, bank_account_name, bank_account_number, is_open
     `;
 
     return NextResponse.json(
@@ -115,6 +121,7 @@ export async function PATCH(request: NextRequest) {
         bankName: rows[0]?.bank_name ?? null,
         bankAccountName: rows[0]?.bank_account_name ?? null,
         bankAccountNumber: rows[0]?.bank_account_number ?? null,
+        isOpen: rows[0]?.is_open ?? true,
         hasProfilePhoto: vendor.profile_photo_key != null,
         status: vendor.status,
       }),

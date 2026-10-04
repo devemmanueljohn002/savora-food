@@ -722,6 +722,7 @@ export type VendorProfile = {
   bankName: string | null;
   bankAccountName: string | null;
   bankAccountNumber: string | null;
+  isOpen?: boolean | null;
   status: string;
   commissionRate: number | null;
   ratingAverage: number;
@@ -799,6 +800,7 @@ export function updateVendorProfileFull(input: {
   bankName?: string | null;
   bankAccountName?: string | null;
   bankAccountNumber?: string | null;
+  isOpen?: boolean;
 }) {
   return apiSend<VendorProfile>("/vendor/profile", "PATCH", input).then((result) => result.data);
 }

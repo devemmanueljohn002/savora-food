@@ -122,7 +122,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: `Payment not successful: ${result.status}` });
     }
 
+    // Idempotency, claimed only after verification succeeds: concurrent
+    // duplicate charge events lose here; the winner processes, replays are
+    // no-ops. Same event_key scheme as transfers. Claiming earlier would
+    // burn the key on a premature event and block the later good one.
     const sql = db();
+    const chargeKey = eventKeyFor(payload, event, reference);
+    const claimed = await sql<{ id: string }[]>`
+      INSERT INTO paystack_webhook_events (event_key, event, reference, payload)
+      VALUES (${chargeKey}, ${event}, ${reference}, ${sql.json(JSON.parse(JSON.stringify(payload)))})
+      ON CONFLICT (event_key) DO NOTHING
+      RETURNING id
+    `;
+    if (claimed.length === 0) {
+      return NextResponse.json({ success: true, message: "Duplicate event ignored." });
+    }
+
     const owner = await sql<{ user_id: string }[]>`
       SELECT user_id FROM orders WHERE id = ${payment.order_id} LIMIT 1
     `;

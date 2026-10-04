@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireCustomer } from "@/server/auth/guard";
-import { createOrdersFromCart } from "@/server/orders";
+import { createOrdersFromCart, expireStalePendingPayments } from "@/server/orders";
 
 const bodySchema = z.object({
   addressId: z.string().uuid(),
@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { addressId, deliveryInstructions, couponCode } = parsed.data;
+    // Reap this shopper's own expired unpaid checkouts first (frees stock).
+    await expireStalePendingPayments(user.id, 20).catch(() => undefined);
     const result = await createOrdersFromCart(user.id, addressId, deliveryInstructions || undefined, couponCode);
     return NextResponse.json(ok(result));
   } catch (error) {

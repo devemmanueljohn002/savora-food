@@ -2,6 +2,7 @@ import { randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { db } from "./db";
 import { ApiError } from "./errors";
 import { notifyUser } from "./vendors";
+import { notifyWithEmail } from "./notify";
 import { assertPurchasable, getCartView } from "./queries/cart";
 import type {
   CheckoutOrderSummary,
@@ -101,6 +102,149 @@ export async function getOtpEnabled(): Promise<boolean> {
 /** 4-digit delivery handshake code shown to the customer. */
 export function generateDeliveryOtp(): string {
   return String(randomInt(1000, 10000));
+}
+
+/** Fallback when order_config is absent. Configurable without a redeploy. */
+export const VENDOR_ACCEPT_TIMEOUT_MINUTES = 30;
+
+/** Unpaid checkouts rot after a day: stock + coupons return to the pool. */
+export const PENDING_PAYMENT_TIMEOUT_MINUTES = 24 * 60;
+
+/** Pure config resolution — unit-testable without a database. */
+export function resolveVendorAcceptTimeout(value: unknown): number {
+  const record = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const minutes = Number(record.vendor_accept_timeout_minutes);
+  if (Number.isFinite(minutes) && minutes > 0) return Math.round(minutes);
+  return VENDOR_ACCEPT_TIMEOUT_MINUTES;
+}
+
+export async function getVendorAcceptTimeoutMinutes(): Promise<number> {
+  try {
+    const rows = await db()<{ value: unknown }[]>`
+      SELECT value FROM platform_settings WHERE key = 'order_config' LIMIT 1
+    `;
+    return resolveVendorAcceptTimeout(rows[0]?.value);
+  } catch {
+    return VENDOR_ACCEPT_TIMEOUT_MINUTES;
+  }
+}
+
+export function resolvePendingPaymentTimeout(value: unknown): number {
+  const record = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const minutes = Number(record.pending_payment_timeout_minutes);
+  if (Number.isFinite(minutes) && minutes > 0) return Math.round(minutes);
+  return PENDING_PAYMENT_TIMEOUT_MINUTES;
+}
+
+export async function getPendingPaymentTimeoutMinutes(): Promise<number> {
+  try {
+    const rows = await db()<{ value: unknown }[]>`
+      SELECT value FROM platform_settings WHERE key = 'order_config' LIMIT 1
+    `;
+    return resolvePendingPaymentTimeout(rows[0]?.value);
+  } catch {
+    return PENDING_PAYMENT_TIMEOUT_MINUTES;
+  }
+}
+
+/**
+ * Lazy unpaid-checkout expiry (no cron needed): cancel PENDING_PAYMENT
+ * orders past the window so reserved stock and coupon redemptions return to
+ * the pool. Called best-effort from checkout + order reads. Bounded and
+ * idempotent — each order flips exactly once (status predicate).
+ */
+export async function expireStalePendingPayments(userId: string, limit = 20): Promise<number> {
+  const sql = db();
+  const timeoutMinutes = await getPendingPaymentTimeoutMinutes();
+  const stale = await sql<{ id: string; order_number: string }[]>`
+    SELECT id, order_number FROM orders
+    WHERE user_id = ${userId} AND status = 'PENDING_PAYMENT'
+      AND created_at < NOW() - make_interval(mins => ${timeoutMinutes})
+    ORDER BY created_at ASC
+    LIMIT ${limit}
+  `;
+  let expired = 0;
+  for (const order of stale) {
+    try {
+      const updated = await sql<{ id: string }[]>`
+        UPDATE orders
+        SET status = 'CANCELLED', dispatch_status = 'CANCELLED', updated_at = NOW(),
+            cancelled_at = NOW(), cancelled_reason = 'Expired: payment was never completed.'
+        WHERE id = ${order.id} AND status = 'PENDING_PAYMENT'
+        RETURNING id
+      `;
+      if (!updated[0]) continue;
+      await sql`
+        INSERT INTO order_status_history (order_id, status, note)
+        VALUES (${order.id}, 'CANCELLED', 'Expired: payment was never completed.')
+      `;
+      await releaseCouponForOrder(order.id).catch(() => undefined);
+      await restoreStockForOrder(order.id).catch(() => undefined);
+      await notifyUser({
+        userId,
+        type: "ORDER",
+        title: `Order ${order.order_number} expired`,
+        body: "You never completed payment, so this order was cancelled and the items were released. Nothing was charged.",
+        data: { orderId: order.id, status: "CANCELLED", expired: true },
+      }).catch(() => undefined);
+      expired += 1;
+    } catch {
+      // one stale order must never block the rest
+    }
+  }
+  return expired;
+}
+
+/**
+ * Lazy vendor-response timeout (no cron needed): cancel PAID orders the
+ * vendor never accepted within the configured window, refund them for real,
+ * and notify the customer. Called best-effort from order read paths, so a
+ * stuck order is released the next time anyone looks at orders. Bounded and
+ * idempotent — each order flips exactly once (status predicate).
+ */
+export async function releaseStalePaidOrders(limit = 20): Promise<number> {
+  const sql = db();
+  const timeoutMinutes = await getVendorAcceptTimeoutMinutes();
+  const stale = await sql<{ id: string; order_number: string; user_id: string }[]>`
+    SELECT id, order_number, user_id FROM orders
+    WHERE status = 'PAID' AND updated_at < NOW() - make_interval(mins => ${timeoutMinutes})
+    ORDER BY updated_at ASC
+    LIMIT ${limit}
+  `;
+  let released = 0;
+  for (const order of stale) {
+    try {
+      const updated = await sql<{ id: string }[]>`
+        UPDATE orders
+        SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED',
+            cancelled_at = NOW(),
+            cancelled_reason = 'Auto-cancelled: the vendor did not respond in time.',
+            updated_at = NOW()
+        WHERE id = ${order.id} AND status = 'PAID'
+        RETURNING id
+      `;
+      if (!updated[0]) continue;
+      await sql`
+        INSERT INTO order_status_history (order_id, status, note)
+        VALUES (${order.id}, 'CANCELLED', 'Auto-cancelled: the vendor did not respond in time.')
+      `;
+      await releaseCouponForOrder(order.id).catch(() => undefined);
+      await restoreStockForOrder(order.id).catch(() => undefined);
+      const { refundOrderPayment } = await import("./refunds");
+      await refundOrderPayment(order.id, "Auto-cancelled: the vendor did not respond in time.");
+      await notifyUser({
+        userId: order.user_id,
+        type: "ORDER",
+        title: `Order ${order.order_number} was cancelled`,
+        body: "The vendor did not respond in time, so your order was cancelled automatically. Your payment will be refunded. If it does not arrive within a few days, contact support.",
+        data: { orderId: order.id, status: "CANCELLED", autoCancelled: true },
+      }).catch(() => undefined);
+      released += 1;
+    } catch {
+      // one stuck order must never block the rest
+    }
+  }
+  return released;
 }
 
 /**
@@ -489,6 +633,26 @@ export async function createOrdersFromCart(
       `;
       if (!claims[0]) {
         throw ApiError.conflict("This coupon has just reached its usage limit.");
+      }
+    }
+
+    // Reserve stock up front (NULL stock_quantity = untracked/infinite).
+    // The guarded UPDATE makes concurrent checkouts serialize on the row:
+    // losers get zero rows back instead of overselling.
+    for (const group of groups) {
+      for (const line of group.lines) {
+        if (!line.productId) continue;
+        const reserved = await tx<{ id: string }[]>`
+          UPDATE products SET stock_quantity = stock_quantity - ${line.quantity}, updated_at = NOW()
+          WHERE id = ${line.productId}
+            AND (stock_quantity IS NULL OR stock_quantity >= ${line.quantity})
+          RETURNING id
+        `;
+        if (!reserved[0]) {
+          throw ApiError.validation(
+            `Sorry — "${line.name}" just ran out (only a few left). Please adjust the quantity and try again.`,
+          );
+        }
       }
     }
 
@@ -909,8 +1073,11 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
   // when the rider picks up the order (see issueDeliveryCode), so a code
   // shown early can never go stale before handover.
   await sql.begin(async (tx) => {
+    // Locked read: a concurrent webhook/verify for the same order blocks
+    // here instead of double-processing payment side effects below.
     const orders = await tx<{ id: string; user_id: string; status: string; order_number: string; total: string; vendor_id: string }[]>`
       SELECT id, user_id, status, order_number, total::text, vendor_id FROM orders WHERE id = ${orderId} LIMIT 1
+      FOR UPDATE
     `;
     if (orders.length === 0) {
       throw ApiError.notFound("Order not found.");
@@ -983,16 +1150,15 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
 
   const ownerId = vendorUserId;
 
-  // Customer confirmation (payment verified → PAID).
-  await notifyUser({
-    userId,
-    type: "ORDER",
+  // Customer confirmation (payment verified → PAID): in-app + email receipt.
+  await notifyWithEmail(userId, {
     title: `Payment confirmed for ${orderNumber}`,
     body: `Your payment of ₦${orderTotal.toLocaleString()} was verified. The vendor has been notified and will start preparing your order. You will receive a 4-digit delivery code once your rider picks it up — share it with the rider on arrival.`,
     data: { orderId, status: "PAID" },
   }).catch(() => undefined);
 
-  // Vendor receives the order the moment it becomes PAID.
+  // Vendor receives the order the moment it becomes PAID: in-app + email
+  // so a vendor who never opens the dashboard still learns about it fast.
   if (ownerId) {
     const detail = await sql<{
       customer_name: string;
@@ -1016,9 +1182,7 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
     const customerName = info?.customer_name?.trim() || "Customer";
     const itemsText = lines.map((line) => `${line.name} × ${line.quantity}`).join("\n") || "—";
     const where = [info?.address, info?.city, info?.state].filter(Boolean).join(", ") || "No address on file";
-    await notifyUser({
-      userId: ownerId,
-      type: "ORDER",
+    await notifyWithEmail(ownerId, {
       title: `NEW ORDER ${orderNumber}`,
       body: [
         `Customer: ${customerName}`,
@@ -1066,6 +1230,26 @@ export async function getConsumerOverview(userId: string): Promise<ConsumerOverv
     upcomingCatering: Number(row?.upcoming_catering ?? 0),
     totalSpend: Number(row?.total_spend ?? 0),
   };
+}
+
+/**
+ * Give reserved stock back when an order dies before fulfilment (vendor
+ * reject/cancel, customer cancel, auto-cancel, expiry). Sums the order lines
+ * per product; NULL-stock (untracked) products are untouched. Best-effort
+ * callers may swallow errors — a missed restore only understates stock.
+ */
+export async function restoreStockForOrder(orderId: string): Promise<void> {
+  const sql = db();
+  const lines = await sql<{ product_id: string | null; quantity: number }[]>`
+    SELECT product_id, quantity FROM order_items WHERE order_id = ${orderId} AND product_id IS NOT NULL
+  `;
+  for (const line of lines) {
+    if (!line.product_id) continue;
+    await sql`
+      UPDATE products SET stock_quantity = stock_quantity + ${line.quantity}, updated_at = NOW()
+      WHERE id = ${line.product_id} AND stock_quantity IS NOT NULL
+    `;
+  }
 }
 
 /** Release one coupon redemption when a vendor rejects/cancels a discounted order. */

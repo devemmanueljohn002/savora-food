@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
     const { page, pageSize, offset } = paging(url);
 
     const sql = db();
+    // Same lazy vendor-timeout sweep as the vendor list, so support views
+    // also release orders a silent vendor is sitting on.
+    const { releaseStalePaidOrders } = await import("@/server/orders");
+    await releaseStalePaidOrders(20).catch(() => undefined);
     const totalRows = await sql<{ count: string }[]>`
       SELECT COUNT(*)::text AS count FROM orders o
       WHERE ${status ? sql`o.status = ${status}` : sql`TRUE`}

@@ -15,6 +15,7 @@ import {
   koboToNaira,
   markWithdrawalProcessing,
   markWithdrawalSubmitted,
+  releaseDueHolds,
   requestWithdrawal,
   type Owner,
   type OwnerPolicy,
@@ -295,6 +296,10 @@ export async function withdraw(input: {
   if (!account.recipientCode) {
     throw ApiError.validation("Add and verify your bank account before withdrawing.");
   }
+
+  // Matured holds unlock here too (not just on balance views), so an owner
+  // who goes straight to withdraw is measured against released funds.
+  await releaseDueHolds(input.owner).catch(() => undefined);
 
   const { withdrawal, duplicate } = await requestWithdrawal({
     owner: input.owner,

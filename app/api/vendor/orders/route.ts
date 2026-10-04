@@ -51,6 +51,10 @@ export async function GET(request: NextRequest) {
     }
 
     const sql = db();
+    // Lazy vendor-timeout sweep: PAID orders this vendor ignored past the
+    // window are auto-cancelled + refunded here instead of rotting.
+    const { releaseStalePaidOrders } = await import("@/server/orders");
+    await releaseStalePaidOrders(20).catch(() => undefined);
     const totalRows = await sql<{ count: string }[]>`
       SELECT COUNT(*)::text AS count FROM orders
       WHERE vendor_id = ${vendor.id} ${status ? sql`AND status = ${status}` : sql``}

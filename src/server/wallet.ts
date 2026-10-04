@@ -510,35 +510,6 @@ export async function creditCancelledPickupFeeTx(
 }
 
 /** One tip per delivery (unique index) — a retried tip callback cannot double-pay. */
-export async function creditTipTx(
-  tx: Tx,
-  input: { deliveryId: string; riderId: string; orderId: string; amountKobo: number },
-): Promise<boolean> {
-  if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) {
-    throw ApiError.validation("Invalid tip amount.");
-  }
-  const owner: Owner = { type: "RIDER", id: input.riderId };
-  await ensureWalletTx(tx, owner);
-  const inserted = await tx<{ id: string }[]>`
-    INSERT INTO wallet_entries
-      (owner_type, owner_id, kind, amount_kobo, balance_after_kobo, delivery_id, order_id, meta)
-    VALUES (
-      ${owner.type}, ${owner.id}, 'tip', ${input.amountKobo},
-      (SELECT pending_kobo + ${input.amountKobo} FROM wallets
-       WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}),
-      ${input.deliveryId}, ${input.orderId}, ${tx.json({})}
-    )
-    ON CONFLICT DO NOTHING
-    RETURNING id
-  `;
-  if (inserted.length === 0) return false;
-  await tx`
-    UPDATE wallets SET pending_kobo = pending_kobo + ${input.amountKobo}, updated_at = NOW()
-    WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}
-  `;
-  return true;
-}
-
 /**
  * Administrative bonus (positive) or penalty (negative) applied to AVAILABLE
  * immediately — these are finance decisions, not delivery earnings, so no
