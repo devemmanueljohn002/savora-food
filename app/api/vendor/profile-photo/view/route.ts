@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       }
       // Server-side proof: assigned to this order, order belongs to the
       // vendor, and both order and delivery are still active.
-      const rows = await db<{
+      const rows = await db()<{
         vendor_id: string;
       }[]>`
         SELECT o.vendor_id::text AS vendor_id

@@ -280,7 +280,13 @@ describeSharp("sharp decode + sanitize (needs native sharp)", () => {
   });
 
   it("strips EXIF: output of an EXIF-bearing JPEG carries no Exif segment", async () => {
-    const sharp = (await import("sharp")).default;
+    // Runtime-narrowed like production code: sharp's shipped types vary.
+    const mod = (await import("sharp")) as unknown as {
+      default: (input: Buffer) => {
+        withMetadata(options: unknown): { jpeg(): { toBuffer(): Promise<Buffer> } };
+      };
+    };
+    const sharp = mod.default;
     // Build a real EXIF-carrying JPEG via sharp itself, then sanitize it.
     const exifJpeg = await sharp(readFileSync(fixture))
       .withMetadata({ exif: { IFD0: { Copyright: "savora-test" } } })

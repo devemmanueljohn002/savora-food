@@ -207,19 +207,38 @@ export type SanitizedImage = { buffer: Buffer; ext: PhotoExt };
  * applied via .rotate(), output is resized inside 1024px and re-encoded
  * WITHOUT metadata — so EXIF/GPS cannot survive. sharp strips metadata by
  * default; only .withMetadata() would preserve it, which we never call.
+ *
+ * Minimal structural surface we use from sharp. Deliberately NOT typed via
+ * `import("sharp")`: sharp's shipped types differ between installs, which
+ * broke the production build. The factory is resolved at runtime and
+ * narrowed here, so any sharp version with this stable API compiles.
  */
-export async function sanitizeImage(buffer: Buffer): Promise<SanitizedImage> {
-  let sharp: typeof import("sharp");
-  try {
-    sharp = (await import("sharp")).default;
-  } catch {
+type SharpPipeline = {
+  metadata(): Promise<{ format?: string }>;
+  rotate(): SharpPipeline;
+  resize(options: Record<string, unknown>): SharpPipeline;
+  toFormat(format: string, options?: Record<string, unknown>): SharpPipeline;
+  toBuffer(): Promise<Buffer>;
+};
+
+type SharpFactory = (input: Buffer, options?: Record<string, unknown>) => SharpPipeline;
+
+async function loadSharpFactory(): Promise<SharpFactory> {
+  const mod = (await import("sharp")) as unknown;
+  const factory =
+    typeof mod === "function" ? mod : (mod as { default?: unknown } | null)?.default ?? null;
+  if (typeof factory !== "function") {
     throw ApiError.internal(
       "Image processing is unavailable on this server. The photo cannot be validated right now — try again later.",
     );
   }
-  let pipeline: import("sharp").Sharp;
+  return factory as SharpFactory;
+}
+
+export async function sanitizeImage(buffer: Buffer): Promise<SanitizedImage> {
+  const sharp = await loadSharpFactory();
   try {
-    pipeline = sharp(buffer, { failOnError: true }).rotate();
+    const pipeline = sharp(buffer, { failOnError: true }).rotate();
     const meta = await pipeline.metadata();
     if (!meta.format || !["jpeg", "png", "webp"].includes(meta.format)) {
       throw ApiError.validation("Only JPEG, PNG or WebP images are allowed.");
