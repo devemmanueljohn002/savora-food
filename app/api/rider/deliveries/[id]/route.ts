@@ -217,7 +217,17 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       const otpEnabled = await getOtpEnabled().catch(() => true);
       const handoverCode = otpEnabled ? generateDeliveryOtp() : null;
       await sql.begin(async (tx) => {
-        await tx`UPDATE deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), delivery_code_attempts = 0, tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note) WHERE id = ${id}`;
+        // Guarded transition: concurrent double-taps race here; the loser
+        // gets zero rows back instead of minting a second code that would
+        // invalidate the customer's first one.
+        const moved = await tx<{ id: string }[]>`
+          UPDATE deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), delivery_code_attempts = 0, tracking_note = COALESCE(${parsed.data.note ?? null}, tracking_note)
+          WHERE id = ${id} AND status IN ('ASSIGNED', 'GOING_TO_VENDOR', 'ARRIVED_AT_VENDOR')
+          RETURNING id
+        `;
+        if (moved.length === 0) {
+          throw ApiError.conflict("This delivery was already picked up.");
+        }
         await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = ${handoverCode}, require_otp = ${otpEnabled}, updated_at = NOW() WHERE id = ${delivery.order_id}`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note)

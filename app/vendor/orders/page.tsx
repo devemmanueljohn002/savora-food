@@ -5,7 +5,7 @@ import Link from "next/link";
 import { VendorShell, VendorSignIn, naira, orderBadge } from "@/components/VendorShell";
 import { useVendorOrders, useVendorProfile } from "@/lib/api/hooks";
 
-const FILTERS = ["", "PAID", "VENDOR_ACCEPTED", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
+const FILTERS = ["", "PAID", "VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
 export default function VendorOrdersPage() {
   const profile = useVendorProfile();

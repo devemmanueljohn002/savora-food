@@ -27,7 +27,6 @@ type OrderRow = {
 const STATUSES = [
   "PENDING_PAYMENT",
   "PAID",
-  "CONFIRMED",
   "PREPARING",
   "READY_FOR_PICKUP",
   "RIDER_ASSIGNED",

@@ -10,9 +10,10 @@ import { db } from "@/server/db";
 // OUT_FOR_DELIVERY -> DELIVERED (rider).
 // A paid order must be explicitly accepted (PAID -> VENDOR_ACCEPTED) or
 // rejected (PAID/VENDOR_ACCEPTED -> CANCELLED) before preparation starts.
+// NOTE: CONFIRMED is a legacy status no writer produces; it is deliberately
+// absent here so it can never re-enter the lifecycle.
 const NEXT: Record<string, string> = {
   VENDOR_ACCEPTED: "PREPARING",
-  CONFIRMED: "PREPARING",
   PREPARING: "READY_FOR_PICKUP",
 };
 

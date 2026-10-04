@@ -9,6 +9,7 @@ import RoleGuard from "@/components/RoleGuard";
 import SignOutButton from "@/components/SignOutButton";
 import {
   useAccount,
+  useCancelOrder,
   useCateringRequests,
   useConsumerOverview,
   useFavorites,
@@ -202,6 +203,23 @@ function OverviewTab() {
 function OrderCard({ order }: { order: OrderListItem }) {
   const [expanded, setExpanded] = useState(false);
   const detail = useOrder(order.id, expanded);
+  const cancel = useCancelOrder();
+  const [cancelError, setCancelError] = useState("");
+  const cancellable = order.status === "PENDING_PAYMENT" || order.status === "PAID";
+
+  async function cancelOrder() {
+    setCancelError("");
+    const refundNote =
+      order.status === "PAID"
+        ? "This will cancel the order and refund your payment. Continue?"
+        : "This will cancel the order. Continue?";
+    if (!window.confirm(refundNote)) return;
+    try {
+      await cancel.mutateAsync({ id: order.id });
+    } catch (reason) {
+      setCancelError(reason instanceof Error ? reason.message : "Could not cancel this order.");
+    }
+  }
 
   return (
     <div className="card card-body" key={order.id}>
@@ -228,8 +246,22 @@ function OrderCard({ order }: { order: OrderListItem }) {
           ) : (
             <Link href={`/track?number=${encodeURIComponent(order.orderNumber)}`}>Track &amp; details</Link>
           )}
+          {cancellable && (
+            <button
+              className="btn secondary btn-sm"
+              disabled={cancel.isPending}
+              onClick={() => void cancelOrder()}
+            >
+              {cancel.isPending ? "Cancelling…" : "Cancel"}
+            </button>
+          )}
         </span>
       </div>
+      {cancelError && (
+        <p className="auth-error" role="alert" style={{ marginTop: 8 }}>
+          {cancelError}
+        </p>
+      )}
       {expanded && (
         <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           {detail.isLoading ? (

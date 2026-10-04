@@ -139,6 +139,44 @@ function ProfilePhotoSection({ hasPhoto }: { hasPhoto: boolean }) {
   );
 }
 
+function OpenToggle({ data }: { data: VendorProfile }) {
+  const update = useUpdateVendorProfile();
+  const [error, setError] = useState("");
+  const open = data.isOpen ?? true;
+
+  async function toggle() {
+    setError("");
+    try {
+      await update.mutateAsync({ isOpen: !open });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not change your status.");
+    }
+  }
+
+  return (
+    <div className="form-card" style={{ maxWidth: 760, marginBottom: 20 }}>
+      <div className="row">
+        <div>
+          <h3 style={{ margin: 0 }}>Kitchen {open ? "open" : "closed"}</h3>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            {open
+              ? "Customers can add your items to cart and check out."
+              : "Ordering is paused — your kitchen is hidden from checkout until you reopen."}
+          </p>
+        </div>
+        <button className="btn" disabled={update.isPending} onClick={toggle} type="button">
+          {update.isPending ? "Updating…" : open ? "Close kitchen" : "Open kitchen"}
+        </button>
+      </div>
+      {error && (
+        <p className="auth-error" role="alert" style={{ marginBottom: 0 }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ProfileEditor({ data }: { data: VendorProfile }) {
   const update = useUpdateVendorProfile();
   const [form, setForm] = useState({
@@ -283,6 +321,7 @@ export default function VendorProfilePage() {
       sub={`Public page: ${data.slug ? `/vendor/${data.slug}` : "available after approval"} · Commission ${data.commissionRate ?? "—"}% · ★ ${data.ratingAverage.toFixed(1)} (${data.ratingCount})`}
     >
       <ProfilePhotoSection hasPhoto={data.hasProfilePhoto} />
+      <OpenToggle key={`open-${data.id}-${data.isOpen}`} data={data} />
       <ProfileEditor key={data.id} data={data} />
     </VendorShell>
   );

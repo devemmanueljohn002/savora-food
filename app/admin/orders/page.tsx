@@ -6,7 +6,7 @@ import { AdminShell, AdminSignIn, Pager, naira, orderBadge } from "@/components/
 import { Table } from "@/components/ui";
 import { useAdminOrders } from "@/lib/api/hooks";
 
-const STATUSES = ["", "PENDING_PAYMENT", "PAID", "VENDOR_ACCEPTED", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "REFUNDED"];
+const STATUSES = ["", "PENDING_PAYMENT", "PAID", "VENDOR_ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "REFUNDED"];
 
 export default function AdminOrdersPage() {
   const [status, setStatus] = useState("");

@@ -24,7 +24,7 @@ export default function VendorDashboardPage() {
   if (profile.isError || !profile.data) return <VendorSignIn />;
 
   const pendingOrders = (orders.data?.items ?? []).filter((order) =>
-    ["PAID", "VENDOR_ACCEPTED", "CONFIRMED", "PREPARING"].includes(order.status),
+    ["PAID", "VENDOR_ACCEPTED", "PREPARING"].includes(order.status),
   );
   const openCatering = (catering.data ?? []).filter((request) =>
     ["SUBMITTED", "UNDER_REVIEW"].includes(request.status),

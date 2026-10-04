@@ -8,6 +8,7 @@ import {
   addCartItem,
   advanceVendorOrder,
   cancelVendorOrder,
+  cancelOrder,
   changeAccountPassword,
   clearCart,
   createAddress,
@@ -337,6 +338,18 @@ export function useCheckout() {
     mutationFn: createCheckoutOrders,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: cartKeys.cart });
+    },
+  });
+}
+
+export function useCancelOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) => cancelOrder(id, note),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: cartKeys.cart });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["order"] });
     },
   });
 }

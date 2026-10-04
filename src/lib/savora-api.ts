@@ -1716,6 +1716,14 @@ export function getOrder(id: string) {
   return apiGet<OrderDetail>(`/orders/${encodeURIComponent(id)}`).then((result) => result.data);
 }
 
+export function cancelOrder(id: string, note?: string | null) {
+  return apiSend<{ status: string; refunded: boolean }>(
+    `/orders/${encodeURIComponent(id)}/cancel`,
+    "POST",
+    { ...(note ? { note } : {}) },
+  ).then((result) => result.data);
+}
+
 export function getOrders(params: OrderQuery = {}) {
   return apiGet<OrderListItem[]>(`/orders${queryString({ page: params.page, limit: params.limit })}`).then(
     (result) => {
