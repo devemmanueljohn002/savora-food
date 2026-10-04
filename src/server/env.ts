@@ -14,6 +14,12 @@ type Env = {
   cloudinaryCloudName?: string;
   cloudinaryApiKey?: string;
   cloudinaryApiSecret?: string;
+  /** Private S3 bucket for vendor profile photos (never public). */
+  s3Bucket?: string;
+  /** Must match the bucket's actual region or signatures fail. */
+  s3Region: string;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
   adminSeedEmail?: string;
   adminSeedPassword?: string;
 };
@@ -77,6 +83,10 @@ export function getEnv(): Env {
     cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() || undefined,
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY?.trim() || undefined,
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET?.trim() || undefined,
+    s3Bucket: process.env.S3_BUCKET?.trim() || undefined,
+    s3Region: process.env.S3_REGION?.trim() || "us-east-1",
+    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID?.trim() || undefined,
+    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY?.trim() || undefined,
     adminSeedEmail: process.env.ADMIN_SEED_EMAIL?.trim() || "admin@savora.food",
     adminSeedPassword: process.env.ADMIN_SEED_PASSWORD?.trim() || undefined,
   };

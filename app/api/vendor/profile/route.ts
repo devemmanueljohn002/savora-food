@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
         bankName: vendor.bank_name,
         bankAccountName: vendor.bank_account_name,
         bankAccountNumber: vendor.bank_account_number,
+        hasProfilePhoto: vendor.profile_photo_key != null,
         status: vendor.status,
         commissionRate: vendor.commission_rate === null ? null : Number(vendor.commission_rate),
         ratingAverage: Number(vendor.rating_average ?? 0),
@@ -114,6 +115,7 @@ export async function PATCH(request: NextRequest) {
         bankName: rows[0]?.bank_name ?? null,
         bankAccountName: rows[0]?.bank_account_name ?? null,
         bankAccountNumber: rows[0]?.bank_account_number ?? null,
+        hasProfilePhoto: vendor.profile_photo_key != null,
         status: vendor.status,
       }),
     );

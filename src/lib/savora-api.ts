@@ -727,10 +727,63 @@ export type VendorProfile = {
   ratingAverage: number;
   ratingCount: number;
   isFeatured: boolean;
+  /** Whether a validated profile photo is on file (recognition only). */
+  hasProfilePhoto: boolean;
 };
 
 export function getVendorProfile() {
   return apiGet<VendorProfile>("/vendor/profile").then((result) => result.data);
+}
+
+/** Vendor profile photo (private S3, presigned browser upload). */
+export type ProfilePhotoUpload = {
+  url: string;
+  fields: Record<string, string>;
+  key: string;
+  expiresAt: string;
+  maxBytes: number;
+};
+
+export function requestProfilePhotoUpload(input: { contentType: string; sizeBytes: number }) {
+  return apiSend<ProfilePhotoUpload>("/vendor/profile-photo/upload", "POST", input).then((result) => result.data);
+}
+
+export function finalizeProfilePhotoUpload(input: { key: string }) {
+  return apiSend<{ profilePhotoKey: string; replaced: boolean }>("/vendor/profile-photo/finalize", "POST", input).then(
+    (result) => result.data,
+  );
+}
+
+export function getProfilePhotoViewUrl() {
+  return apiGet<{ url: string; expiresAt: string }>("/vendor/profile-photo/view").then((result) => result.data);
+}
+
+/**
+ * Browser-to-S3 POST upload with progress. The file field must be appended
+ * LAST — S3 ignores form fields after it.
+ */
+export function postFileToS3(
+  url: string,
+  fields: Record<string, string>,
+  file: Blob,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed (${xhr.status}). Try again.`));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+    const form = new FormData();
+    for (const [name, value] of Object.entries(fields)) form.append(name, value);
+    form.append("file", file);
+    xhr.send(form);
+  });
 }
 
 export function updateVendorProfileFull(input: {

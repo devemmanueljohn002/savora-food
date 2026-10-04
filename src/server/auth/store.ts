@@ -310,6 +310,8 @@ export type VendorRow = {
   state: string | null;
   logo_url: string | null;
   banner_image_url: string | null;
+  /** Server-generated S3 key of the validated profile photo (NULL = none). */
+  profile_photo_key: string | null;
   bank_name: string | null;
   bank_account_name: string | null;
   bank_account_number: string | null;

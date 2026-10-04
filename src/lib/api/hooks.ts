@@ -59,11 +59,14 @@ import {
   getVendorOnboarding,
   getVendorOrder,
   getVendorProduct,
+  getProfilePhotoViewUrl,
   getVendorProfile,
   getVendors,
   getVendorProducts,
   getRiderRecipient,
+  finalizeProfilePhotoUpload,
   listRiderWithdrawals,
+  requestProfilePhotoUpload,
   requestRiderWithdrawal,
   saveRiderRecipient,
   initializePayment,
@@ -950,6 +953,37 @@ export function useVendorProfile() {
     retry: false,
     staleTime: 60_000,
     refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export const profilePhotoKeys = {
+  viewUrl: ["vendor-profile-photo-url"] as const,
+};
+
+export function useProfilePhotoViewUrl(enabled: boolean) {
+  return useQuery({
+    queryKey: profilePhotoKeys.viewUrl,
+    queryFn: getProfilePhotoViewUrl,
+    enabled,
+    retry: false,
+    staleTime: 4 * 60_000,
+  });
+}
+
+export function useRequestProfilePhotoUpload() {
+  return useMutation({
+    mutationFn: (input: { contentType: string; sizeBytes: number }) => requestProfilePhotoUpload(input),
+  });
+}
+
+export function useFinalizeProfilePhotoUpload() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string }) => finalizeProfilePhotoUpload(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: profilePhotoKeys.viewUrl });
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
+    },
   });
 }
 

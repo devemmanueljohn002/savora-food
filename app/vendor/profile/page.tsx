@@ -4,8 +4,140 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { VendorShell, VendorSignIn } from "@/components/VendorShell";
 import ImageUploader from "@/components/ImageUploader";
-import { useUpdateVendorProfile, useVendorProfile } from "@/lib/api/hooks";
+import {
+  useFinalizeProfilePhotoUpload,
+  useProfilePhotoViewUrl,
+  useRequestProfilePhotoUpload,
+  useUpdateVendorProfile,
+  useVendorProfile,
+} from "@/lib/api/hooks";
+import { postFileToS3 } from "@/lib/savora-api";
 import type { VendorProfile } from "@/lib/savora-api";
+
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const PHOTO_MAX_DIMENSION = 1024;
+
+/**
+ * Downscale to ~1024px and re-encode via canvas. Canvas re-encoding drops
+ * EXIF/GPS metadata. Convenience only — the server re-validates and
+ * re-encodes every upload before it is stored.
+ */
+async function preparePhotoFile(file: File): Promise<{ blob: Blob; type: string }> {
+  const allowed = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowed.includes(file.type)) {
+    throw new Error("Only JPEG, PNG or WebP images are allowed.");
+  }
+  if (file.size <= 0 || file.size > PHOTO_MAX_BYTES) {
+    throw new Error("Image must be 5 MB or smaller.");
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { blob: file, type: file.type };
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if (typeof bitmap.close === "function") bitmap.close();
+    const outType = file.type === "image/png" ? "image/png" : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outType, 0.85));
+    if (!blob) return { blob: file, type: file.type };
+    return { blob, type: outType };
+  } catch {
+    return { blob: file, type: file.type };
+  }
+}
+
+function ProfilePhotoSection({ hasPhoto }: { hasPhoto: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const viewUrl = useProfilePhotoViewUrl(hasPhoto || saved);
+  const requestUpload = useRequestProfilePhotoUpload();
+  const finalizeUpload = useFinalizeProfilePhotoUpload();
+
+  async function pick(file: File | undefined) {
+    if (!file || busy) return;
+    setError("");
+    setSaved(false);
+    setBusy(true);
+    setProgress(0);
+    try {
+      const prepared = await preparePhotoFile(file);
+      const upload = await requestUpload.mutateAsync({
+        contentType: prepared.type,
+        sizeBytes: prepared.blob.size,
+      });
+      await postFileToS3(upload.url, upload.fields, prepared.blob, (fraction) => setProgress(fraction));
+      setProgress(1);
+      await finalizeUpload.mutateAsync({ key: upload.key });
+      setSaved(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
+  return (
+    <section className="form-card" style={{ maxWidth: 760, marginBottom: 24 }} aria-label="Profile photo">
+      <h3 style={{ marginTop: 0 }}>Profile photo</h3>
+      {hasPhoto || saved ? (
+        viewUrl.data ? (
+          <p>
+            <img
+              src={viewUrl.data.url}
+              alt="Your kitchen profile photo"
+              style={{ maxWidth: 220, borderRadius: 12, display: "block" }}
+            />
+          </p>
+        ) : viewUrl.isError ? (
+          <p className="auth-error" role="alert">
+            Could not load your photo. Try reloading the page.
+          </p>
+        ) : (
+          <p className="muted">Loading photo…</p>
+        )
+      ) : (
+        <p className="muted">
+          <strong>Add a profile photo</strong> so riders and customers can recognize your kitchen. This is optional —
+          it never blocks orders or your account.
+        </p>
+      )}
+      <label>
+        {hasPhoto || saved ? "Change photo" : "Upload photo"}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={busy}
+          onChange={(event) => {
+            void pick(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+      <p className="muted">JPEG, PNG or WebP · max 5 MB · resized to about 1024px.</p>
+      {busy && <p className="muted">{progress === null ? "Uploading…" : `Uploading… ${Math.round(progress * 100)}%`}</p>}
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+      {saved && (
+        <p className="auth-success" role="status">
+          Profile photo saved.
+        </p>
+      )}
+      <p className="muted">
+        Your photo is used for profile and recognition purposes only. It can be seen by you, by Savora Food admins,
+        and by riders on your active orders. It is not government identity verification.
+      </p>
+    </section>
+  );
+}
 
 function ProfileEditor({ data }: { data: VendorProfile }) {
   const update = useUpdateVendorProfile();
@@ -150,6 +282,7 @@ export default function VendorProfilePage() {
       title="Kitchen profile"
       sub={`Public page: ${data.slug ? `/vendor/${data.slug}` : "available after approval"} · Commission ${data.commissionRate ?? "—"}% · ★ ${data.ratingAverage.toFixed(1)} (${data.ratingCount})`}
     >
+      <ProfilePhotoSection hasPhoto={data.hasProfilePhoto} />
       <ProfileEditor key={data.id} data={data} />
     </VendorShell>
   );
