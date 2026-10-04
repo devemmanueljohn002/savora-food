@@ -21,51 +21,18 @@ const actionSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 });
 
-/** Targeted dispatch: offer to eligible riders first, broadcast as fallback. */
-async function broadcastRiderJob(orderId: string, orderNumber: string, vendorName: string): Promise<void> {
+/**
+ * Offer the ready order to the single best eligible rider. The dispatch
+ * service notifies that rider (in-app + email); there is deliberately no
+ * broadcast — riders can only accept a live offer addressed to them.
+ */
+async function offerRiderJob(orderId: string): Promise<void> {
   try {
     const { createDispatchOffers } = await import("@/server/dispatch");
-    const offered = await createDispatchOffers(orderId);
-    if (offered > 0) {
-      const riders = await db()<{ user_id: string }[]>`
-        SELECT dp.user_id FROM delivery_offers o
-        JOIN delivery_partners dp ON dp.id = o.delivery_partner_id
-        WHERE o.order_id = ${orderId} AND o.status = 'OFFERED' AND o.expires_at > NOW()
-      `;
-      await Promise.all(
-        riders.map((rider) =>
-          notifyUser({
-            userId: rider.user_id,
-            type: "ORDER",
-            title: `DELIVERY REQUEST ${orderNumber}`,
-            body: `${vendorName} has an order ready for pickup. Review earnings and tap ACCEPT before it expires.`,
-            data: { orderId, status: "READY_FOR_PICKUP" },
-          }).catch(() => undefined),
-        ),
-      );
-      return;
-    }
+    await createDispatchOffers(orderId);
   } catch {
-    // fall through to broadcast
+    // dispatch failure must never fail the vendor's advance action
   }
-  const riders = await db()<{
-    user_id: string;
-  }[]>`
-    SELECT dp.user_id
-    FROM delivery_partners dp
-    WHERE dp.status = 'ACTIVE' AND dp.verification_status = 'APPROVED' AND dp.is_online = TRUE
-  `;
-  await Promise.all(
-    riders.map((rider) =>
-      notifyUser({
-        userId: rider.user_id,
-        type: "ORDER",
-        title: `New delivery job ${orderNumber}`,
-        body: `${vendorName} has an order ready for pickup. Open your dashboard to accept it.`,
-        data: { orderId, status: "READY_FOR_PICKUP" },
-      }).catch(() => undefined),
-    ),
-  );
 }
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -234,7 +201,8 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       const reason = parsed.data.note ?? "Rejected by vendor";
       const { releaseCouponForOrder } = await import("@/server/orders");
       await sql.begin(async (tx) => {
-        await tx`UPDATE orders SET status = 'CANCELLED', payment_status = 'REFUNDED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+        await tx`UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+        await tx`UPDATE delivery_offers SET status = 'CANCELLED' WHERE order_id = ${id} AND status = 'OFFERED'`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note, created_by)
           VALUES (${id}, 'CANCELLED', ${reason}, ${session.id})
@@ -297,7 +265,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         data: { orderId: id, status: next },
       });
       if (next === "READY_FOR_PICKUP") {
-        await broadcastRiderJob(id, order.order_number, vendor.business_name);
+        await offerRiderJob(id);
       }
       return NextResponse.json(ok({ status: next }));
     }
@@ -311,7 +279,8 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     const rejected = order.status === "PAID";
     const reason = parsed.data.note ?? (rejected ? "Rejected by vendor" : "Cancelled by vendor");
     await sql.begin(async (tx) => {
-      await tx`UPDATE orders SET status = 'CANCELLED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+      await tx`UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW() WHERE id = ${id}`;
+      await tx`UPDATE delivery_offers SET status = 'CANCELLED' WHERE order_id = ${id} AND status = 'OFFERED'`;
       await tx`
         INSERT INTO order_status_history (order_id, status, note, created_by)
         VALUES (${id}, 'CANCELLED', ${reason}, ${session.id})

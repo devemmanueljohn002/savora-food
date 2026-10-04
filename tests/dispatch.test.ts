@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { hashDeliveryCode, rankCandidates, type DispatchCandidate } from "@/server/dispatch";
+import {
+  canTransitionDelivery,
+  canTransitionOffer,
+  hashDeliveryCode,
+  MAX_DISPATCH_ATTEMPTS,
+  OFFER_TTL_SECONDS,
+  rankCandidates,
+  resolveDispatchConfig,
+  type DispatchCandidate,
+} from "@/server/dispatch";
 import { computeMoneySplit, normalizePayoutConfig } from "@/server/money";
 
 function rider(partial: Partial<DispatchCandidate> & { id: string }): DispatchCandidate {
@@ -36,6 +45,68 @@ describe("delivery code", () => {
   it("hashes deterministically", () => {
     expect(hashDeliveryCode("4821")).toBe(hashDeliveryCode("4821"));
     expect(hashDeliveryCode("4821")).not.toBe(hashDeliveryCode("4822"));
+  });
+});
+
+describe("offer transitions (single authority)", () => {
+  it("moves OFFERED only to ACCEPTED/DECLINED/EXPIRED/CANCELLED", () => {
+    for (const next of ["ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"]) {
+      expect(canTransitionOffer("OFFERED", next)).toBe(true);
+    }
+    expect(canTransitionOffer("OFFERED", "OFFERED")).toBe(false);
+    expect(canTransitionOffer("OFFERED", "DELIVERED")).toBe(false);
+  });
+
+  it("treats every terminal offer state as final", () => {
+    for (const from of ["ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"]) {
+      for (const to of ["OFFERED", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"]) {
+        expect(canTransitionOffer(from, to)).toBe(false);
+      }
+    }
+    expect(canTransitionOffer("BOGUS", "ACCEPTED")).toBe(false);
+  });
+});
+
+describe("delivery transitions (single authority)", () => {
+  it("follows the assignment lifecycle in order", () => {
+    expect(canTransitionDelivery("OFFERED", "ASSIGNED")).toBe(true);
+    expect(canTransitionDelivery("ASSIGNED", "PICKED_UP")).toBe(true);
+    expect(canTransitionDelivery("PICKED_UP", "IN_TRANSIT")).toBe(true);
+    expect(canTransitionDelivery("IN_TRANSIT", "DELIVERED")).toBe(true);
+  });
+
+  it("allows failure/cancellation from any live state, never from terminal ones", () => {
+    for (const from of ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"]) {
+      expect(canTransitionDelivery(from, "FAILED")).toBe(true);
+      expect(canTransitionDelivery(from, "CANCELLED")).toBe(true);
+    }
+    for (const from of ["DELIVERED", "FAILED", "CANCELLED"]) {
+      expect(canTransitionDelivery(from, "ASSIGNED")).toBe(false);
+      expect(canTransitionDelivery(from, "PICKED_UP")).toBe(false);
+    }
+    // No skipping ahead: assigned straight to delivered is forbidden.
+    expect(canTransitionDelivery("ASSIGNED", "DELIVERED")).toBe(false);
+  });
+});
+
+describe("dispatch config (configurable TTL + max attempts)", () => {
+  it("defaults to 90s offers and 5 attempts", () => {
+    expect(OFFER_TTL_SECONDS).toBe(90);
+    expect(MAX_DISPATCH_ATTEMPTS).toBe(5);
+    expect(resolveDispatchConfig(null)).toEqual({ offerTtlSeconds: 90, maxAttempts: 5 });
+    expect(resolveDispatchConfig({})).toEqual({ offerTtlSeconds: 90, maxAttempts: 5 });
+  });
+
+  it("reads configured values and rejects garbage", () => {
+    expect(resolveDispatchConfig({ offer_ttl_seconds: 60, max_dispatch_attempts: 3 })).toEqual({
+      offerTtlSeconds: 60,
+      maxAttempts: 3,
+    });
+    expect(resolveDispatchConfig({ offer_ttl_seconds: 0, max_dispatch_attempts: -2 })).toEqual({
+      offerTtlSeconds: 90,
+      maxAttempts: 5,
+    });
+    expect(resolveDispatchConfig({ offer_ttl_seconds: "soon" })).toEqual({ offerTtlSeconds: 90, maxAttempts: 5 });
   });
 });
 

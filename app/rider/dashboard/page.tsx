@@ -13,7 +13,24 @@ import {
   useRiderProfile,
   useUpdateRiderProfile,
 } from "@/lib/api/hooks";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+/** Live mm:ss countdown to an offer expiry. Ticks locally; the list refetch
+ *  (jobs feed polls) removes expired/taken cards once the server agrees. */
+function OfferCountdown({ expiresAt }: { expiresAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const left = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+  const text = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  return (
+    <strong className={left <= 15 ? "price" : undefined} aria-live="polite">
+      {text}
+    </strong>
+  );
+}
 
 export default function RiderDashboardPage() {
   const profile = useRiderProfile();
@@ -147,7 +164,7 @@ export default function RiderDashboardPage() {
           {jobs.data?.map((job) => (
             <div className="card card-body" key={job.id}>
               <p className="muted" style={{ margin: "0 0 4px", textTransform: "uppercase", fontSize: 12 }}>
-                {job.offered ? "Delivery request" : "Open job"}
+                Delivery request · <OfferCountdown expiresAt={job.offerExpiresAt ?? job.createdAt} />
               </p>
               <div className="row">
                 <div>
@@ -178,15 +195,13 @@ export default function RiderDashboardPage() {
                     <button className="btn btn-sm" disabled={accept.isPending || !!current} onClick={() => takeJob(job.id)}>
                       {accept.isPending ? "Accepting…" : current ? "Finish current first" : "Accept"}
                     </button>
-                    {job.offered && (
-                      <button
-                        className="btn secondary btn-sm"
-                        disabled={decline.isPending}
-                        onClick={() => passJob(job.id)}
-                      >
-                        Decline
-                      </button>
-                    )}
+                    <button
+                      className="btn secondary btn-sm"
+                      disabled={decline.isPending}
+                      onClick={() => passJob(job.id)}
+                    >
+                      Decline
+                    </button>
                   </span>
                 </div>
               </div>
