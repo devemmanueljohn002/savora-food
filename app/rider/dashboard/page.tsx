@@ -154,6 +154,17 @@ export default function RiderDashboardPage() {
         </div>
       ) : jobs.isLoading ? (
         <p className="muted">Loading jobs…</p>
+      ) : jobs.isError ? (
+        <div className="empty-state">
+          <p className="empty-state-title">Couldn&apos;t load jobs</p>
+          <p className="empty-state-desc">
+            {jobs.error instanceof Error ? jobs.error.message : "Something went wrong."} Check your connection and
+            try again.
+          </p>
+          <button className="btn secondary btn-sm" type="button" onClick={() => void jobs.refetch()}>
+            Retry
+          </button>
+        </div>
       ) : (jobs.data?.length ?? 0) === 0 ? (
         <div className="empty-state">
           <p className="empty-state-title">No jobs right now</p>

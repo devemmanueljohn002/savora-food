@@ -17,6 +17,37 @@ export async function GET(request: NextRequest) {
       // never block the job feed on dispatch maintenance
     }
 
+    // Lazy dispatch sweep: orders sitting in PENDING_ASSIGNMENT with no live
+    // offer (e.g. no rider was eligible when the vendor marked them ready,
+    // or a rider just came online) get offered now. Without this, such
+    // orders would sit UNKNOWN forever — nothing else retriggers dispatch.
+    // Bounded + advisory-locked inside createDispatchOffers, so concurrent
+    // polls are safe and duplicate offers impossible.
+    try {
+      const { createDispatchOffers } = await import("@/server/dispatch");
+      const pending = await db()<{ id: string }[]>`
+        SELECT o.id FROM orders o
+        WHERE o.status = 'READY_FOR_PICKUP'
+          AND o.dispatch_status = 'PENDING_ASSIGNMENT'
+          AND o.delivery_partner_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM deliveries d
+            WHERE d.order_id = o.id AND d.status NOT IN ('FAILED','CANCELLED')
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM delivery_offers f
+            WHERE f.order_id = o.id AND f.status = 'OFFERED' AND f.expires_at > NOW()
+          )
+        ORDER BY o.created_at ASC
+        LIMIT 5
+      `;
+      for (const row of pending) {
+        await createDispatchOffers(row.id).catch(() => undefined);
+      }
+    } catch {
+      // never block the job feed on dispatch maintenance
+    }
+
   // Targeted offers for this rider ONLY: a rider may accept nothing except a
   // live, unexpired offer addressed to them (no open-claim pool).
   const offers = await db()<{
