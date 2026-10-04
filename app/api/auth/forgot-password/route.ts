@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { okMessage, toEnvelope } from "@/server/errors";
-import { sendPasswordResetEmail } from "@/server/email";
+import { RESET_MINUTES, sendPasswordResetEmail } from "@/server/email";
 import { getEnv } from "@/server/env";
 import { createPasswordResetToken, getUserByEmail } from "@/server/auth/store";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
@@ -24,7 +24,10 @@ export async function POST(request: Request) {
       await createPasswordResetToken({
         userId: user.id,
         tokenHash: hashToken(rawToken),
-        expiresHours: 1,
+        // Same constant the email wording uses (RESET_MINUTES): the link lives
+        // exactly as long as the email promises. make_interval accepts
+        // fractional hours, so 30 minutes is 0.5.
+        expiresHours: RESET_MINUTES / 60,
       });
       const resetUrl = `${getEnv().appUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
       try {

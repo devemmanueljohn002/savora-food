@@ -26,6 +26,24 @@ function numberFromEnv(value: string | undefined, fallback: number): number {
 }
 
 /**
+ * Base URL for links sent to users (password reset, email verification,
+ * Paystack checkout callback). APP_URL is REQUIRED — a silent localhost
+ * fallback is exactly how real users received broken links. Trailing slashes
+ * are stripped so built links never contain a double slash.
+ */
+function resolveAppUrl(): string {
+  const raw = process.env.APP_URL?.trim();
+  if (!raw) {
+    throw new Error("APP_URL is not set. Set it to the public URL of the frontend (e.g. https://app.savora.food).");
+  }
+  const appUrl = raw.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "production" && appUrl.startsWith("http://")) {
+    console.warn("[env] WARNING: APP_URL uses http:// in production. Production APP_URL must be https.");
+  }
+  return appUrl;
+}
+
+/**
  * Reads validated environment configuration. Throws when required values are
  * missing — only called lazily at request/script time, never at import time, so
  * `next build` can analyze modules without a configured database.
@@ -49,7 +67,7 @@ export function getEnv(): Env {
     jwtIssuer: process.env.JWT_ISSUER?.trim() || "savora-food",
     accessTokenTtlMinutes: numberFromEnv(process.env.ACCESS_TOKEN_TTL_MINUTES, 30),
     refreshTokenTtlDays: numberFromEnv(process.env.REFRESH_TOKEN_TTL_DAYS, 30),
-    appUrl: process.env.APP_URL?.trim() || "http://localhost:3000",
+    appUrl: resolveAppUrl(),
     apiUrl: process.env.API_URL?.trim() || "/api",
     paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() || undefined,
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() || undefined,

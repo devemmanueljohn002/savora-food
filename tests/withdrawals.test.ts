@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 // so these must be set before the first call (imports are hoisted, calls are not).
 process.env.DATABASE_URL ??= "postgres://test:test@localhost:5432/test";
 process.env.JWT_SECRET ??= "test-secret-for-withdrawals";
+process.env.APP_URL ??= "http://localhost:3000";
 process.env.PAYSTACK_SECRET_KEY ??= "sk_test_withdrawals_secret";
 
 import { verifyWebhookSignature } from "@/server/payments/paystack";

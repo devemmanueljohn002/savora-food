@@ -1,4 +1,5 @@
 import { getEnv } from "../env";
+import { buildResetEmail } from "./templates.js";
 
 export type EmailMessage = {
   to: string;
@@ -6,6 +7,14 @@ export type EmailMessage = {
   text: string;
   html?: string;
 };
+
+/**
+ * Token/code lifetimes in minutes. The SAME constants drive both the email
+ * wording (via the template builders) and the real DB expiry, so the email
+ * can never promise a different window than the backend enforces.
+ */
+export const RESET_MINUTES = 30;
+export const OTP_MINUTES = 10;
 
 /**
  * Email dispatcher. Uses Brevo when BREVO_API_KEY is configured, else Resend
@@ -81,11 +90,8 @@ async function sendViaBrevo(message: EmailMessage, apiKey: string, emailFrom?: s
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  await sendEmail({
-    to,
-    subject: "Reset your Savora Food password",
-    text: `We received a request to reset your Savora Food password.\n\nOpen this link to set a new password (expires in 1 hour):\n${resetUrl}\n\nIf you did not request this, you can safely ignore this email.`,
-  });
+  const { subject, htmlContent, textContent } = buildResetEmail(resetUrl, RESET_MINUTES);
+  await sendEmail({ to, subject, text: textContent, html: htmlContent });
 }
 
 export async function sendVerificationEmail(to: string, verifyUrl: string): Promise<void> {
