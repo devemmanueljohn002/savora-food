@@ -79,6 +79,11 @@ export async function PATCH(request: NextRequest) {
     const d = parsed.data;
     const sql = db();
     const goingOnline = d.status === "ACTIVE";
+    // NOTE: never interpolate a possibly-null/undefined value into a
+    // typeless SQL position (e.g. `CASE WHEN ${x} IS NULL` or
+    // `COALESCE(${x}, col)` with x undefined) — Postgres cannot infer the
+    // parameter type (42P18) and the whole PATCH 500s. Emit a column
+    // reference instead when the field was not supplied.
     const rows = await sql<{
       id: string;
       name: string;
@@ -90,13 +95,13 @@ export async function PATCH(request: NextRequest) {
       current_zone: string | null;
     }[]>`
       UPDATE delivery_partners SET
-        name = COALESCE(${d.name ?? null}, name),
+        name = ${d.name === undefined ? sql`name` : d.name},
         phone = ${d.phone === undefined ? sql`phone` : d.phone},
         vehicle_type = ${d.vehicleType === undefined ? sql`vehicle_type` : d.vehicleType},
         vehicle_number = ${d.vehicleNumber === undefined ? sql`vehicle_number` : d.vehicleNumber},
-        status = COALESCE(${d.status ?? null}, status),
-        is_online = CASE WHEN ${d.status ?? null} IS NULL THEN is_online WHEN ${d.status ?? null} = 'ACTIVE' THEN TRUE ELSE FALSE END,
-        last_active_at = CASE WHEN ${goingOnline} THEN NOW() ELSE last_active_at END
+        status = ${d.status === undefined ? sql`status` : d.status},
+        is_online = ${d.status === undefined ? sql`is_online` : d.status === "ACTIVE"},
+        last_active_at = ${goingOnline ? sql`NOW()` : sql`last_active_at`}
         ${d.currentZone === undefined ? sql`` : sql`, current_zone = ${d.currentZone}`}
       WHERE id = ${rider.id}
       RETURNING id, name, phone, vehicle_type, vehicle_number, status, is_online, current_zone

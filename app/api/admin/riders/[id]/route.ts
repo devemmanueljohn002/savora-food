@@ -112,10 +112,12 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     const d = parsed.data;
     // Keep the status <=> is_online invariant: an explicit status change
     // flips presence with it (SUSPENDED/OFFLINE always offline).
+    // NOTE: conditional fragments, not `CASE WHEN ${x} IS NULL` — an
+    // untyped parameter in a typeless position makes Postgres throw 42P18.
     const rows = await sql<{ id: string; verification_status: string; status: string }[]>`
       UPDATE delivery_partners SET
-        status = COALESCE(${d.status ?? null}, status),
-        is_online = CASE WHEN ${d.status ?? null} IS NULL THEN is_online WHEN ${d.status ?? null} = 'ACTIVE' THEN TRUE ELSE FALSE END,
+        status = ${d.status === undefined ? sql`status` : d.status},
+        is_online = ${d.status === undefined ? sql`is_online` : d.status === "ACTIVE"},
         verification_status = COALESCE(${d.verificationStatus ?? null}, verification_status),
         verified_at = CASE WHEN ${d.verificationStatus ?? null} = 'APPROVED' THEN NOW() ELSE verified_at END,
         document_note = ${d.documentNote === undefined ? sql`document_note` : d.documentNote}
