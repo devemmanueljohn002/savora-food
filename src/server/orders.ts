@@ -1188,7 +1188,25 @@ export async function findPaymentByReference(reference: string): Promise<Payment
   return rows.length > 0 ? rows[0] : null;
 }
 
-export async function markOrderPaymentPaid(orderId: string, userId: string): Promise<void> {
+export type MarkPaidResult = { applied: boolean; alreadyPaid: boolean };
+
+/**
+ * Confirm an order as paid. Idempotent per reference: verify + webhook racing
+ * for the same order collapse to one winner; the loser (or any replay for the
+ * same reference) returns { alreadyPaid: true } instead of an error.
+ *
+ * Concurrency: SELECT ... FOR UPDATE serializes concurrent confirmations for
+ * the same order, and the state flip itself is a conditional
+ * UPDATE ... WHERE status = 'PENDING_PAYMENT' so only one worker wins even
+ * without the lock. The winning Paystack reference is stored on
+ * orders.paystack_reference (UNIQUE) so a reference can never confirm two
+ * orders.
+ */
+export async function markOrderPaymentPaid(
+  orderId: string,
+  userId: string,
+  reference?: string,
+): Promise<MarkPaidResult> {
   const sql = db();
   let paidNow = false;
   let vendorUserId: string | null = null;
@@ -1211,28 +1229,84 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
       throw ApiError.forbidden("You do not have access to this order.");
     }
 
-    const alreadyPaid = orders[0].status !== "PENDING_PAYMENT";
-    if (alreadyPaid) return;
+    if (orders[0].status !== "PENDING_PAYMENT") {
+      // Idempotent replay: the order already left PENDING_PAYMENT via an
+      // earlier verify/webhook (or progressed further down the lifecycle).
+      // Same-reference replays — and verify+webhook both arriving — are
+      // success, not errors. A cancelled/expired order is the only case that
+      // must NOT resurrect into PAID.
+      const paidProgression = new Set([
+        "PAID",
+        "VENDOR_ACCEPTED",
+        "CONFIRMED",
+        "PREPARING",
+        "READY_FOR_PICKUP",
+        "RIDER_ASSIGNED",
+        "OUT_FOR_DELIVERY",
+        "DELIVERED",
+      ]);
+      if (paidProgression.has(orders[0].status)) return;
+      throw ApiError.conflict(
+        `This order is ${orders[0].status.replaceAll("_", " ")} and can no longer be paid. If you were charged, contact support with your reference.`,
+      );
+    }
     assertOrderTransition(orders[0].status, "PAID");
 
     orderNumber = orders[0].order_number;
     orderTotal = Number(orders[0].total);
-    paidNow = true;
 
-    await tx`
-      UPDATE orders
-      SET status = 'PAID', payment_status = 'PAID', updated_at = NOW(),
-          delivery_otp = NULL, require_otp = FALSE
-      WHERE id = ${orderId}
-    `;
+    // Atomic conditional flip: only the first worker moves PENDING_PAYMENT ->
+    // PAID. A race loser gets zero rows and is treated as already-paid below.
+    // paystack_reference is best-effort until migration 017 lands (fallback
+    // without the column keeps old deploys working during rollout).
+    let flipped: { id: string }[] = [];
+    if (reference) {
+      try {
+        flipped = await tx<{ id: string }[]>`
+          UPDATE orders
+          SET status = 'PAID', payment_status = 'PAID', updated_at = NOW(),
+              delivery_otp = NULL, require_otp = FALSE,
+              paystack_reference = COALESCE(paystack_reference, ${reference})
+          WHERE id = ${orderId} AND status = 'PENDING_PAYMENT'
+          RETURNING id
+        `;
+      } catch (error) {
+        if ((error as { code?: string }).code !== "42703") throw error;
+        flipped = await tx<{ id: string }[]>`
+          UPDATE orders
+          SET status = 'PAID', payment_status = 'PAID', updated_at = NOW(),
+              delivery_otp = NULL, require_otp = FALSE
+          WHERE id = ${orderId} AND status = 'PENDING_PAYMENT'
+          RETURNING id
+        `;
+      }
+    } else {
+      flipped = await tx<{ id: string }[]>`
+        UPDATE orders
+        SET status = 'PAID', payment_status = 'PAID', updated_at = NOW(),
+            delivery_otp = NULL, require_otp = FALSE
+        WHERE id = ${orderId} AND status = 'PENDING_PAYMENT'
+        RETURNING id
+      `;
+    }
+    if (!flipped[0]) return;
+    paidNow = true;
     await tx`
       INSERT INTO order_status_history (order_id, status) VALUES (${orderId}, 'PAID')
     `;
-    await tx`
-      UPDATE payments
-      SET status = 'SUCCESS', paid_at = NOW()
-      WHERE order_id = ${orderId} AND status <> 'SUCCESS'
-    `;
+    if (reference) {
+      await tx`
+        UPDATE payments
+        SET status = 'SUCCESS', paid_at = COALESCE(paid_at, NOW())
+        WHERE payment_reference = ${reference}
+      `;
+    } else {
+      await tx`
+        UPDATE payments
+        SET status = 'SUCCESS', paid_at = COALESCE(paid_at, NOW())
+        WHERE order_id = ${orderId} AND status <> 'SUCCESS'
+      `;
+    }
 
     const lines = await tx<{ product_id: string | null }[]>`
       SELECT product_id FROM order_items WHERE order_id = ${orderId} AND product_id IS NOT NULL
@@ -1256,7 +1330,31 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
     vendorUserId = vendorRows[0]?.user_id ?? null;
   });
 
-  if (!paidNow) return;
+  if (!paidNow) {
+    // Race loser or replay: re-read to report accurately without duplicate
+    // side effects (no second email/vendor ping).
+    try {
+      const current = await sql<{ status: string }[]>`
+        SELECT status FROM orders WHERE id = ${orderId} LIMIT 1
+      `;
+      const paidProgression = new Set([
+        "PAID",
+        "VENDOR_ACCEPTED",
+        "CONFIRMED",
+        "PREPARING",
+        "READY_FOR_PICKUP",
+        "RIDER_ASSIGNED",
+        "OUT_FOR_DELIVERY",
+        "DELIVERED",
+      ]);
+      if (current[0] && paidProgression.has(current[0].status)) {
+        return { applied: false, alreadyPaid: true };
+      }
+    } catch {
+      // fall through — caller already holds a conflict/not-found from tx
+    }
+    return { applied: false, alreadyPaid: true };
+  }
 
   // Financial ledger: record the customer charge + computed split (best-effort).
   try {
@@ -1321,6 +1419,8 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
       data: { orderId, status: "PAID" },
     }).catch(() => undefined);
   }
+
+  return { applied: true, alreadyPaid: false };
 }
 
 export type ConsumerOverview = {

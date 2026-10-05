@@ -6,7 +6,7 @@ import { ApiError } from "./errors";
  * predicate that implies it). Terminal states accept nothing.
  */
 export const ORDER_TRANSITIONS: Record<string, readonly string[]> = {
-  PENDING_PAYMENT: ["CANCELLED"],
+  PENDING_PAYMENT: ["PAID", "CANCELLED"],
   PAID: ["VENDOR_ACCEPTED", "CANCELLED"],
   VENDOR_ACCEPTED: ["PREPARING", "CANCELLED"],
   PREPARING: ["READY_FOR_PICKUP", "RIDER_ASSIGNED", "CANCELLED"],

@@ -63,8 +63,18 @@ function CheckoutInner() {
           <div className="card card-body">
             <h2>Payment verification failed</h2>
             <p className="muted" role="alert">{verifyError}</p>
-            <p className="muted">If you were charged, the payment may still be processing. Contact support with your reference.</p>
+            <p className="muted">If you were charged, the payment may still be processing. Contact support with your reference{reference ? ` (${reference})` : ""}.</p>
             <Link className="btn" href="/checkout" style={{ marginTop: 12 }}>Back to checkout</Link>
+          </div>
+        ) : verified!.pendingConfirmation ? (
+          <div className="card card-body">
+            <h2>Payment received, confirming your order</h2>
+            <p>We confirmed your payment with Paystack and are finalizing order <strong>{verified!.orderNumber}</strong>.</p>
+            <p className="muted">Reference: <code>{verified!.reference ?? reference}</code>. The vendor will be notified automatically — no need to pay again. If this page does not update in a minute, contact support with your reference.</p>
+            <div className="row" style={{ gap: 10, marginTop: 16 }}>
+              <Link className="btn" href="/account/orders">View my orders</Link>
+              <Link className="btn secondary" href="/food">Keep browsing</Link>
+            </div>
           </div>
         ) : (
           <div className="card card-body">

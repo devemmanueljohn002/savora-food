@@ -63,6 +63,7 @@ describe("order transitions (single gate)", () => {
   it("allows the documented lifecycle path", async () => {
     const { canTransitionOrder, assertOrderTransition } = await import("@/server/order-transitions");
     const path: [string, string][] = [
+      ["PENDING_PAYMENT", "PAID"],
       ["PENDING_PAYMENT", "CANCELLED"],
       ["PAID", "VENDOR_ACCEPTED"],
       ["VENDOR_ACCEPTED", "PREPARING"],
@@ -87,7 +88,6 @@ describe("order transitions (single gate)", () => {
     const { canTransitionOrder, assertOrderTransition } = await import("@/server/order-transitions");
     for (const [from, to] of [
       ["PAID", "DELIVERED"],
-      ["PENDING_PAYMENT", "PAID"],
       ["RIDER_ASSIGNED", "DELIVERED"],
       ["READY_FOR_PICKUP", "OUT_FOR_DELIVERY"],
       ["DELIVERED", "CANCELLED"],

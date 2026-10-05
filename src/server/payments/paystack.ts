@@ -102,6 +102,8 @@ export async function initializePaystack(args: PaystackInitializeArgs): Promise<
 export type PaystackVerifyResult = {
   status: "success" | "abandoned" | "failed" | string;
   amount: number | null;
+  currency: string | null;
+  reference: string | null;
   paidAt: string | null;
 };
 
@@ -111,8 +113,40 @@ export async function verifyPaystackReference(reference: string): Promise<Paysta
   return {
     status: data.status ?? "unknown",
     amount: typeof data.amount === "number" ? data.amount : null,
+    currency: typeof (data as { currency?: unknown }).currency === "string"
+      ? ((data as { currency: string }).currency as string)
+      : null,
+    reference: typeof (data as { reference?: unknown }).reference === "string"
+      ? ((data as { reference: string }).reference as string)
+      : null,
     paidAt: typeof data.paid_at === "string" ? data.paid_at : null,
   };
+}
+
+/**
+ * Server-side Paystack confirmation gate. Never trust the client's redirect:
+ * the transaction must report success AND match this order on reference,
+ * amount (kobo) and currency. Returns null when everything matches, otherwise
+ * a human-safe reason (no raw gateway payload).
+ */
+export function paystackMismatchReason(
+  verified: PaystackVerifyResult,
+  expected: { reference: string; amountKobo: number; currency?: string },
+): string | null {
+  if (verified.status !== "success") {
+    return `Payment not successful (${verified.status}).`;
+  }
+  const wantCurrency = expected.currency ?? "NGN";
+  if (verified.reference && verified.reference !== expected.reference) {
+    return "Payment reference does not match this order.";
+  }
+  if (verified.currency && verified.currency.toUpperCase() !== wantCurrency.toUpperCase()) {
+    return `Currency mismatch (expected ${wantCurrency}).`;
+  }
+  if (verified.amount !== null && verified.amount !== expected.amountKobo) {
+    return "Amount paid does not match the order total.";
+  }
+  return null;
 }
 
 export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {

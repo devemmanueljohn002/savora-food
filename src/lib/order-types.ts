@@ -133,6 +133,9 @@ export type PaymentVerifyResult = {
   orderNumber: string;
   status: OrderStatus;
   paid: boolean;
+  reference?: string;
+  pendingConfirmation?: boolean;
+  message?: string;
 };
 
 export type OrderQuery = {
