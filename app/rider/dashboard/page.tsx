@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { RiderShell, RiderSignIn, deliveryBadge, naira } from "@/components/RiderShell";
 import RoleGuard from "@/components/RoleGuard";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   useAcceptRiderJob,
   useDeclineRiderJob,
@@ -298,6 +299,7 @@ export default function RiderDashboardPage() {
 function ActiveDeliveryCard({ deliveryId, status, requireOtp }: { deliveryId: string; status: string; requireOtp: boolean }) {
   const action = useRiderDeliveryAction(deliveryId);
   const releaseJob = useReleaseRiderJob();
+  const confirm = useConfirm();
   const [error, setError] = useState("");
   const [otp, setOtp] = useState("");
   const releasable = ["ASSIGNED", "GOING_TO_VENDOR", "ARRIVED_AT_VENDOR"].includes(status);
@@ -314,7 +316,7 @@ function ActiveDeliveryCard({ deliveryId, status, requireOtp }: { deliveryId: st
 
   async function release() {
     setError("");
-    if (!window.confirm("Release this job back to the board? Only do this before pickup.")) return;
+    if (!(await confirm({ title: "Release this job?", body: "It goes back to the board. Only do this before pickup.", confirmLabel: "Release job" }))) return;
     try {
       await releaseJob.mutateAsync(deliveryId);
     } catch (reason) {

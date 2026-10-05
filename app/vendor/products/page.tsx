@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
 import { useDeleteVendorProduct, useVendorProductsList, useVendorProfile } from "@/lib/api/hooks";
+import { useConfirm } from "@/components/ui/confirm";
 import { updateVendorProduct } from "@/lib/savora-api";
 
 export default function VendorProductsPage() {
   const profile = useVendorProfile();
+  const confirm = useConfirm();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"" | "active" | "inactive" | "low">("");
   const products = useVendorProductsList({
@@ -41,7 +43,7 @@ export default function VendorProductsPage() {
   }
 
   async function onDelete(id: string, name: string) {
-    if (!window.confirm(`Delete “${name}”? Products with order history are deactivated instead.`)) return;
+    if (!(await confirm({ title: `Delete “${name}”?`, body: "Products with order history are deactivated instead.", confirmLabel: "Delete", danger: true }))) return;
     setError("");
     try {
       await remove.mutateAsync(id);

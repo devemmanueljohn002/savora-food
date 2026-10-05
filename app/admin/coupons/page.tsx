@@ -2,11 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import { AdminShell, AdminSignIn } from "@/components/AdminShell";
+import { useConfirm } from "@/components/ui/confirm";
 import { Table } from "@/components/ui";
 import { useAdminCoupons, useCreateAdminCoupon, useDeleteAdminCoupon, useUpdateAdminCoupon } from "@/lib/api/hooks";
 
 function CouponActions({ id, isActive }: { id: string; isActive: boolean }) {
   const update = useUpdateAdminCoupon(id);
+  const confirm = useConfirm();
   const remove = useDeleteAdminCoupon();
 
   async function toggle() {
@@ -18,7 +20,7 @@ function CouponActions({ id, isActive }: { id: string; isActive: boolean }) {
   }
 
   async function onDelete() {
-    if (!window.confirm("Delete this coupon?")) return;
+    if (!(await confirm({ title: "Delete this coupon?", confirmLabel: "Delete", danger: true }))) return;
     await remove.mutateAsync(id);
   }
 

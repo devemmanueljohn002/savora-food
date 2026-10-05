@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
+import { useConfirm } from "@/components/ui/confirm";
 import { useAddresses, useCreateAddress, useDeleteAddress, useUpdateAddress } from "@/lib/api/hooks";
 import type { AddressInput } from "@/lib/order-types";
 
@@ -20,6 +21,7 @@ const EMPTY: AddressInput & { isDefault?: boolean } = {
 
 export default function AccountAddressesPage() {
   const addresses = useAddresses();
+  const confirm = useConfirm();
   const create = useCreateAddress();
   const update = useUpdateAddress();
   const remove = useDeleteAddress();
@@ -78,7 +80,7 @@ export default function AccountAddressesPage() {
   }
 
   async function onDelete(id: string) {
-    if (!window.confirm("Delete this address?")) return;
+    if (!(await confirm({ title: "Delete this address?", confirmLabel: "Delete", danger: true }))) return;
     setError("");
     try {
       await remove.mutateAsync(id);

@@ -3,6 +3,7 @@
 import { FormEvent, use, useState } from "react";
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
+import { useConfirm } from "@/components/ui/confirm";
 import VendorNav from "@/components/VendorNav";
 import { VendorSignIn, naira } from "@/components/VendorShell";
 import {
@@ -14,6 +15,7 @@ import {
 
 function Detail({ id }: { id: string }) {
   const detail = useVendorCateringDetail(id);
+  const confirm = useConfirm();
   const quote = useQuoteVendorCatering(id);
   const decline = useDeclineVendorCatering(id);
   const [amount, setAmount] = useState("");
@@ -37,7 +39,7 @@ function Detail({ id }: { id: string }) {
   }
 
   async function onDecline() {
-    if (!window.confirm("Decline this request? The customer will be notified.")) return;
+    if (!(await confirm({ title: "Decline this request?", body: "The customer will be notified.", confirmLabel: "Decline", danger: true }))) return;
     setError("");
     try {
       await decline.mutateAsync();

@@ -20,6 +20,7 @@ import {
   useRemoveFavorite,
   useUpdateCateringRequest,
 } from "@/lib/api/hooks";
+import { useConfirm } from "@/components/ui/confirm";
 import type { OrderListItem } from "@/lib/order-types";
 
 const TABS = ["overview", "orders", "catering", "favorites", "notifications", "profile"] as const;
@@ -204,6 +205,7 @@ function OrderCard({ order }: { order: OrderListItem }) {
   const [expanded, setExpanded] = useState(false);
   const detail = useOrder(order.id, expanded);
   const cancel = useCancelOrder();
+  const confirm = useConfirm();
   const [cancelError, setCancelError] = useState("");
   const cancellable = order.status === "PENDING_PAYMENT" || order.status === "PAID";
 
@@ -213,7 +215,7 @@ function OrderCard({ order }: { order: OrderListItem }) {
       order.status === "PAID"
         ? "This will cancel the order and refund your payment. Continue?"
         : "This will cancel the order. Continue?";
-    if (!window.confirm(refundNote)) return;
+    if (!(await confirm({ title: "Cancel this order?", body: refundNote, confirmLabel: "Cancel order", danger: true }))) return;
     try {
       await cancel.mutateAsync({ id: order.id });
     } catch (reason) {
@@ -530,7 +532,7 @@ function NotificationsTab() {
       ) : (
         <div className="grid" style={{ gridTemplateColumns: "1fr", marginTop: 16 }}>
           {list.data?.items.map((item) => (
-            <div className="card card-body" key={item.id} style={item.readAt ? undefined : { borderColor: "#ffc9a3" }}>
+              <div className="card card-body" key={item.id} style={item.readAt ? undefined : { borderColor: "var(--orange)", background: "#fff5ec" }}>
               <div className="row">
                 <strong>{item.title}</strong>
                 <span className="muted" style={{ fontSize: 13 }}>

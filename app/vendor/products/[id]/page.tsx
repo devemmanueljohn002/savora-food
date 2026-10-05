@@ -3,6 +3,7 @@
 import { FormEvent, use, useState } from "react";
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
+import { useConfirm } from "@/components/ui/confirm";
 import VendorNav from "@/components/VendorNav";
 import ProductForm, { productFormToInput, type ProductFormState } from "@/components/ProductForm";
 import { VendorSignIn, naira } from "@/components/VendorShell";
@@ -127,6 +128,7 @@ function VariantManager({ productId }: { productId: string }) {
 
 function Editor({ productId }: { productId: string }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const product = useVendorProduct(productId);
   const update = useUpdateVendorProduct(productId);
   const remove = useDeleteVendorProduct();
@@ -171,7 +173,7 @@ function Editor({ productId }: { productId: string }) {
   }
 
   async function onDelete() {
-    if (!data || !window.confirm(`Delete “${data.name}”? Products with order history are deactivated instead.`)) return;
+    if (!data || !(await confirm({ title: `Delete “${data.name}”?`, body: "Products with order history are deactivated instead.", confirmLabel: "Delete", danger: true }))) return;
     try {
       await remove.mutateAsync(productId);
       router.push("/vendor/products");
