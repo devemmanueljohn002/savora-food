@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext, notifyUser } from "@/server/vendors";
+import { assertOrderTransition } from "@/server/order-transitions";
 import { db } from "@/server/db";
 
 // Vendor-driven progression. Payment and rider handoff are owned by other actors:
@@ -171,6 +172,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
           `Only a paid order can be accepted (current status: ${order.status.replaceAll("_", " ")}).`,
         );
       }
+      assertOrderTransition(order.status, "VENDOR_ACCEPTED");
       await sql.begin(async (tx) => {
         // Guarded write: a concurrent accept/reject wins the row; the loser
         // gets zero rows back instead of double-processing the order.
@@ -204,6 +206,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         );
       }
       const reason = parsed.data.note ?? "Rejected by vendor";
+      assertOrderTransition(order.status, "CANCELLED");
       const { releaseCouponForOrder } = await import("@/server/orders");
       await sql.begin(async (tx) => {
         // Guarded write: see accept above — concurrent reject/cancel loses.
@@ -253,6 +256,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
             : `This order cannot be advanced from ${order.status.replaceAll("_", " ")}.`,
         );
       }
+      assertOrderTransition(order.status, next);
       await sql.begin(async (tx) => {
         // Guarded write: concurrent advances lose instead of double-logging.
         const updated = await tx<{ id: string }[]>`
@@ -289,6 +293,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
     const rejected = order.status === "PAID";
     const reason = parsed.data.note ?? (rejected ? "Rejected by vendor" : "Cancelled by vendor");
+    assertOrderTransition(order.status, "CANCELLED");
     // A live delivery may exist (cancel is allowed while RIDER_ASSIGNED).
     // Void it so a later rider action cannot resurrect this cancelled order.
     const openDeliveries = await sql<{ delivery_id: string; rider_user_id: string | null }[]>`

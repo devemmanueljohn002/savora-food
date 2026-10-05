@@ -282,6 +282,12 @@ function OrderCard({ order }: { order: OrderListItem }) {
                   Delivery code: <strong>{detail.data.deliveryOtp}</strong> — share it with your rider on arrival.
                 </p>
               )}
+              {detail.data.requireOtp && !detail.data.deliveryOtp && !["DELIVERED", "CANCELLED", "REFUNDED"].includes(detail.data.status) && (
+                <p className="auth-success" role="status" style={{ marginTop: 8 }}>
+                  Your delivery code was sent to you when the rider picked up — check your email and
+                  notifications, and share it with your rider on arrival.
+                </p>
+              )}
               {detail.data.items.map((item) => (
                 <p className="muted" key={item.id} style={{ margin: "4px 0" }}>
                   {item.quantity} × {item.name} · {naira(item.lineTotal)}

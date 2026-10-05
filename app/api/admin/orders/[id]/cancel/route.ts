@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { auditLog, requireAdminUser } from "@/server/admin";
 import { notifyUser } from "@/server/vendors";
+import { assertOrderTransition } from "@/server/order-transitions";
 import { releaseCouponForOrder, restoreStockForOrder } from "@/server/orders";
 import { refundOrderPayment } from "@/server/refunds";
 import { db } from "@/server/db";
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }
 
     const reason = parsed.data.note ?? "Cancelled by support";
+    assertOrderTransition(order.status, "CANCELLED");
     const markRefunded = order.payment_status === "PAID" || order.status !== "PENDING_PAYMENT";
     const openDeliveries = await sql<{ delivery_id: string; rider_user_id: string | null }[]>`
       SELECT d.id AS delivery_id, dp.user_id AS rider_user_id

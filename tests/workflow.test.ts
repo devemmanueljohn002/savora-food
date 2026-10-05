@@ -12,14 +12,13 @@ import {
   toKobo,
   verifyDeliveryOtp,
 } from "@/server/orders";
-import { hashDeliveryCode, rankCandidates } from "@/server/dispatch";
+import { boardAreaAllowed, boardEligibility, hashDeliveryCode } from "@/server/dispatch";
 import { computeMoneySplit, DEFAULT_PAYOUT } from "@/server/money";
 import type { CartItemView } from "@/lib/order-types";
 
 // Mirrors NEXT in app/api/vendor/orders/[id]/route.ts — vendor-driven progression.
 const VENDOR_NEXT: Record<string, string> = {
   VENDOR_ACCEPTED: "PREPARING",
-  CONFIRMED: "PREPARING",
   PREPARING: "READY_FOR_PICKUP",
 };
 
@@ -99,22 +98,20 @@ describe("full workflow: Consumer → Vendor → Rider → Consumer", () => {
   });
 
   it("rider is dispatched, accepts the job, and runs the delivery state machine", () => {
-    // Dispatch ranking: idle + zone match wins over busy / out-of-zone.
-    const idleNear = {
-      id: "r-near", user_id: "u-near", name: "Near Rider", vehicle_type: "BIKE",
-      current_zone: "ikeja", rating_average: 4.8, last_assignment_at: null, active_trips: 0,
-    };
-    const busy = { ...idleNear, id: "r-busy", user_id: "u-busy", name: "Busy", active_trips: 1 };
-    const far = { ...idleNear, id: "r-far", user_id: "u-far", name: "Far", current_zone: "lekki" };
-    const ranked = rankCandidates([busy, far, idleNear], { vehicle_required: null, zone: "ikeja" });
-    expect(ranked[0].id).toBe("r-near");
-
-    // Accept gate mirrors rider/jobs/accept: order must be READY_FOR_PICKUP with no live delivery.
-    const canAcceptJob = (orderStatus: string, liveDelivery: boolean, riderOnline: boolean) =>
-      orderStatus === "READY_FOR_PICKUP" && !liveDelivery && riderOnline;
-    expect(canAcceptJob("PREPARING", false, true)).toBe(false);
-    expect(canAcceptJob("READY_FOR_PICKUP", true, true)).toBe(false);
-    expect(canAcceptJob("READY_FOR_PICKUP", false, true)).toBe(true);
+    // Open board: eligibility gate + area match decide who sees the job.
+    const idle = { status: "ACTIVE", verification_status: "APPROVED", is_online: true, active_deliveries: 0 };
+    expect(boardEligibility(idle, 1).eligible).toBe(true);
+    expect(boardEligibility({ ...idle, active_deliveries: 1 }, 1).eligible).toBe(false);
+    expect(boardAreaAllowed("ikeja", "Lagos", null, "Ikeja", null)).toBe(true);
+    expect(boardAreaAllowed("lekki", "Lagos", null, "Ikeja", null)).toBe(false);
+    // Claim gate mirrors claimBoardJob: paid PREPARING/READY order, no rider,
+    // eligible rider under the active-job limit.
+    const canClaimJob = (orderStatus: string, paid: boolean, claimed: boolean, activeJobs: number) =>
+      ["PREPARING", "READY_FOR_PICKUP"].includes(orderStatus) && paid && !claimed && activeJobs < 1;
+    expect(canClaimJob("PREPARING", true, false, 0)).toBe(true);
+    expect(canClaimJob("READY_FOR_PICKUP", true, false, 0)).toBe(true);
+    expect(canClaimJob("READY_FOR_PICKUP", true, true, 0)).toBe(false);
+    expect(canClaimJob("READY_FOR_PICKUP", true, false, 1)).toBe(false);
 
     // Delivery progression with OTP handshake at drop-off.
     const otp = generateDeliveryOtp();

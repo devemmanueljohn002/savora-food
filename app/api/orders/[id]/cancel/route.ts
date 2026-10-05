@@ -5,6 +5,7 @@ import { requireCustomer } from "@/server/auth/guard";
 import { getOrderForUser, releaseCouponForOrder, restoreStockForOrder } from "@/server/orders";
 import { refundOrderPayment } from "@/server/refunds";
 import { notifyUser } from "@/server/vendors";
+import { assertOrderTransition } from "@/server/order-transitions";
 import { db } from "@/server/db";
 
 const bodySchema = z.object({
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
     const wasPaid = order.status === "PAID";
     const reason = parsed.data.note ?? (wasPaid ? "Cancelled by customer" : "Cancelled before payment");
+    assertOrderTransition(order.status, "CANCELLED");
     const sql = db();
     await sql.begin(async (tx) => {
       // Guarded write: a concurrent payment/accept wins the row instead.

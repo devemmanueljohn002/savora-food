@@ -58,3 +58,68 @@ describe("refundPaystackTransaction", () => {
     );
   });
 });
+
+describe("order transitions (single gate)", () => {
+  it("allows the documented lifecycle path", async () => {
+    const { canTransitionOrder, assertOrderTransition } = await import("@/server/order-transitions");
+    const path: [string, string][] = [
+      ["PENDING_PAYMENT", "CANCELLED"],
+      ["PAID", "VENDOR_ACCEPTED"],
+      ["VENDOR_ACCEPTED", "PREPARING"],
+      ["PREPARING", "READY_FOR_PICKUP"],
+      ["PREPARING", "RIDER_ASSIGNED"],
+      ["READY_FOR_PICKUP", "RIDER_ASSIGNED"],
+      ["RIDER_ASSIGNED", "OUT_FOR_DELIVERY"],
+      ["RIDER_ASSIGNED", "READY_FOR_PICKUP"],
+      ["OUT_FOR_DELIVERY", "DELIVERED"],
+      ["OUT_FOR_DELIVERY", "READY_FOR_PICKUP"],
+      ["PAID", "CANCELLED"],
+      ["RIDER_ASSIGNED", "CANCELLED"],
+      ["OUT_FOR_DELIVERY", "CANCELLED"],
+    ];
+    for (const [from, to] of path) {
+      expect(canTransitionOrder(from, to)).toBe(true);
+      expect(() => assertOrderTransition(from, to)).not.toThrow();
+    }
+  });
+
+  it("rejects skips, backward jumps, and terminal exits", async () => {
+    const { canTransitionOrder, assertOrderTransition } = await import("@/server/order-transitions");
+    for (const [from, to] of [
+      ["PAID", "DELIVERED"],
+      ["PENDING_PAYMENT", "PAID"],
+      ["RIDER_ASSIGNED", "DELIVERED"],
+      ["READY_FOR_PICKUP", "OUT_FOR_DELIVERY"],
+      ["DELIVERED", "CANCELLED"],
+      ["CANCELLED", "READY_FOR_PICKUP"],
+      ["BOGUS", "PAID"],
+    ] as [string, string][]) {
+      expect(canTransitionOrder(from, to)).toBe(false);
+      expect(() => assertOrderTransition(from, to)).toThrow(/cannot move from/);
+    }
+  });
+});
+
+describe("hashed delivery codes", () => {
+  it("verifies hashed codes and falls back to legacy plaintext", async () => {
+    const { verifyDeliveryCode, hashDeliveryCode } = await import("@/server/orders");
+    const hash = hashDeliveryCode("4821");
+    expect(verifyDeliveryCode("4821", hash, null)).toBe(true);
+    expect(verifyDeliveryCode("4822", hash, null)).toBe(false);
+    expect(verifyDeliveryCode("4821", "not-a-hash...........", null)).toBe(false);
+    expect(verifyDeliveryCode("4821", null, "4821")).toBe(true);
+    expect(verifyDeliveryCode("4822", null, "4821")).toBe(false);
+    expect(verifyDeliveryCode("", hash, null)).toBe(false);
+    expect(verifyDeliveryCode(null, hash, null)).toBe(false);
+  });
+});
+
+describe("unclaimed refund window", () => {
+  it("defaults to 6 hours and reads configured values", async () => {
+    const { resolveUnclaimedRefundHours, UNCLAIMED_REFUND_HOURS } = await import("@/server/orders");
+    expect(UNCLAIMED_REFUND_HOURS).toBe(6);
+    expect(resolveUnclaimedRefundHours(null)).toBe(6);
+    expect(resolveUnclaimedRefundHours({ unclaimed_refund_hours: 2 })).toBe(2);
+    expect(resolveUnclaimedRefundHours({ unclaimed_refund_hours: 0 })).toBe(6);
+  });
+});

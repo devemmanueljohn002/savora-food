@@ -3,6 +3,7 @@ import { db } from "./db";
 import { ApiError } from "./errors";
 import { notifyUser } from "./vendors";
 import { notifyWithEmail } from "./notify";
+import { assertOrderTransition } from "./order-transitions";
 import { assertPurchasable, getCartView } from "./queries/cart";
 import type {
   CheckoutOrderSummary,
@@ -110,6 +111,14 @@ export const VENDOR_ACCEPT_TIMEOUT_MINUTES = 30;
 /** Unpaid checkouts rot after a day: stock + coupons return to the pool. */
 export const PENDING_PAYMENT_TIMEOUT_MINUTES = 24 * 60;
 
+/**
+ * POLICY DEFAULT (tune via order_config.unclaimed_refund_hours): a paid
+ * order no rider ever claimed is auto-cancelled + refunded this long after
+ * it became claimable. Food cannot wait forever and the customer should not
+ * have to discover the cancel button themselves.
+ */
+export const UNCLAIMED_REFUND_HOURS = 6;
+
 /** Pure config resolution — unit-testable without a database. */
 export function resolveVendorAcceptTimeout(value: unknown): number {
   const record = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
@@ -134,6 +143,93 @@ export function resolvePendingPaymentTimeout(value: unknown): number {
   const minutes = Number(record.pending_payment_timeout_minutes);
   if (Number.isFinite(minutes) && minutes > 0) return Math.round(minutes);
   return PENDING_PAYMENT_TIMEOUT_MINUTES;
+}
+
+export function resolveUnclaimedRefundHours(value: unknown): number {
+  const record = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const hours = Number(record.unclaimed_refund_hours);
+  if (Number.isFinite(hours) && hours > 0) return hours;
+  return UNCLAIMED_REFUND_HOURS;
+}
+
+export async function getUnclaimedRefundHours(): Promise<number> {
+  try {
+    const rows = await db()<{ value: unknown }[]>`
+      SELECT value FROM platform_settings WHERE key = 'order_config' LIMIT 1
+    `;
+    return resolveUnclaimedRefundHours(rows[0]?.value);
+  } catch {
+    return UNCLAIMED_REFUND_HOURS;
+  }
+}
+
+/**
+ * Lazy no-rider-found resolution (no cron needed): paid orders that sat
+ * claimable past the window with no rider ever taking them are cancelled
+ * and refunded for real. Only orders with no open delivery qualify, so a
+ * held job is never yanked mid-trip. Bounded and idempotent — each order
+ * flips exactly once (status predicate). Called best-effort from order
+ * read paths next to releaseStalePaidOrders.
+ */
+export async function refundStaleUnclaimedOrders(limit = 10): Promise<number> {
+  const sql = db();
+  const hours = await getUnclaimedRefundHours();
+  const stale = await sql<{ id: string; order_number: string; user_id: string }[]>`
+    SELECT o.id, o.order_number, o.user_id FROM orders o
+    WHERE o.status IN ('PREPARING', 'READY_FOR_PICKUP')
+      AND o.payment_status = 'PAID'
+      AND o.delivery_partner_id IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM deliveries d
+        WHERE d.order_id = o.id AND d.status NOT IN ('FAILED', 'CANCELLED')
+      )
+      AND GREATEST(
+        o.created_at,
+        COALESCE(
+          (SELECT MAX(created_at) FROM order_status_history h
+           WHERE h.order_id = o.id AND h.status = 'READY_FOR_PICKUP'),
+          o.created_at
+        )
+      ) < NOW() - make_interval(hours => ${hours})
+    ORDER BY o.created_at ASC
+    LIMIT ${limit}
+  `;
+  let refunded = 0;
+  for (const order of stale) {
+    try {
+      const updated = await sql<{ id: string }[]>`
+        UPDATE orders
+        SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED',
+            cancelled_at = NOW(),
+            cancelled_reason = 'Auto-cancelled: no rider claimed the order in time.',
+            updated_at = NOW()
+        WHERE id = ${order.id}
+          AND status IN ('PREPARING', 'READY_FOR_PICKUP')
+          AND delivery_partner_id IS NULL
+        RETURNING id
+      `;
+      if (!updated[0]) continue;
+      await sql`
+        INSERT INTO order_status_history (order_id, status, note)
+        VALUES (${order.id}, 'CANCELLED', 'Auto-cancelled: no rider claimed the order in time.')
+      `;
+      await releaseCouponForOrder(order.id).catch(() => undefined);
+      await restoreStockForOrder(order.id).catch(() => undefined);
+      const { refundOrderPayment } = await import("./refunds");
+      await refundOrderPayment(order.id, "Auto-cancelled: no rider claimed the order in time.");
+      await notifyUser({
+        userId: order.user_id,
+        type: "ORDER",
+        title: `Order ${order.order_number} was cancelled`,
+        body: "No rider was available for your order, so it was cancelled automatically. Your payment will be refunded. If it does not arrive within a few days, contact support.",
+        data: { orderId: order.id, status: "CANCELLED", autoCancelled: true },
+      }).catch(() => undefined);
+      refunded += 1;
+    } catch {
+      // one stuck order must never block the rest
+    }
+  }
+  return refunded;
 }
 
 export async function getPendingPaymentTimeoutMinutes(): Promise<number> {
@@ -264,7 +360,9 @@ export async function issueDeliveryCode(orderId: string): Promise<string | null>
   const enabled = await getOtpEnabled().catch(() => true);
   const code = enabled ? generateDeliveryOtp() : null;
   await db()`
-    UPDATE orders SET delivery_otp = ${code}, require_otp = ${enabled}, updated_at = NOW()
+    UPDATE orders
+    SET delivery_otp = NULL, delivery_code_hash = ${code ? hashDeliveryCode(code) : null},
+        require_otp = ${enabled}, updated_at = NOW()
     WHERE id = ${orderId}
   `;
   await db()`
@@ -272,6 +370,33 @@ export async function issueDeliveryCode(orderId: string): Promise<string | null>
     WHERE order_id = ${orderId} AND status NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
   `;
   return code;
+}
+
+/** Single hashing implementation lives in dispatch.ts; imported here so
+ *  verifiers target one digest format (re-exported for consumers). */
+import { hashDeliveryCode } from "./dispatch";
+export { hashDeliveryCode };
+
+/**
+ * Dual-read verifier for the hashing transition: hashed codes (issued after
+ * migration 015) compare digests in constant time; legacy plaintext codes
+ * still in flight compare as before. Either way the plaintext code is never
+ * logged or returned.
+ */
+export function verifyDeliveryCode(
+  supplied: string | null,
+  hash: string | null,
+  legacyPlaintext: string | null,
+): boolean {
+  if (!supplied || !supplied.trim()) return false;
+  const attempt = supplied.trim();
+  if (hash) {
+    const a = Buffer.from(hashDeliveryCode(attempt));
+    const b = Buffer.from(hash);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  }
+  return verifyDeliveryOtp(legacyPlaintext, attempt);
 }
 
 /** Timing-safe comparison for short delivery codes. */
@@ -1088,6 +1213,7 @@ export async function markOrderPaymentPaid(orderId: string, userId: string): Pro
 
     const alreadyPaid = orders[0].status !== "PENDING_PAYMENT";
     if (alreadyPaid) return;
+    assertOrderTransition(orders[0].status, "PAID");
 
     orderNumber = orders[0].order_number;
     orderTotal = Number(orders[0].total);

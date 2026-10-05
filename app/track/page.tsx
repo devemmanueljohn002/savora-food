@@ -270,6 +270,12 @@ function TrackingResult({ tracked }: { tracked: OrderTracking }) {
                   arrival.
                 </p>
               )}
+              {tracked.requireOtp && !tracked.deliveryOtp && !CLOSED.includes(tracked.status) && (
+                <p className="auth-success" role="status" style={{ margin: "12px 0 0" }}>
+                  Your delivery code was sent to you when the rider picked up — check your email and
+                  notifications, and share it with your rider on arrival.
+                </p>
+              )}
               {(tracked.delivery.progressPct ?? 0) > 0 && !CLOSED.includes(tracked.status) && (
                 <p style={{ margin: "8px 0 0" }} aria-label={`Delivery progress ${tracked.delivery.progressPct}%`}>
                   <span

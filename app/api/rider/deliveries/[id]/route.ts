@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireRole, ROLES } from "@/server/auth/guard";
 import { getRiderByUserId } from "@/server/riders";
 import { notifyWithEmail } from "@/server/notify";
+import { assertOrderTransition } from "@/server/order-transitions";
 import { db } from "@/server/db";
 
 const actionSchema = z.object({
@@ -146,6 +147,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       customer_id: string;
       vendor_id: string;
       delivery_otp: string | null;
+      delivery_code_hash: string | null;
       require_otp: boolean;
     }[]>`
       SELECT d.id, d.status, d.delivery_code_attempts,
@@ -166,6 +168,19 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     if (["CANCELLED", "DELIVERED", "REFUNDED"].includes(delivery.order_status)) {
       throw ApiError.conflict("This order is already closed.");
     }
+    // Single state machine: actions that move the ORDER declare the jump
+    // here (going/arrived/in_transit only move the delivery row).
+    const action = parsed.data.action;
+    const ORDER_JUMP: Record<string, string | null> = {
+      going: null,
+      arrived: null,
+      pickup: "OUT_FOR_DELIVERY",
+      in_transit: null,
+      deliver: "DELIVERED",
+      fail: "READY_FOR_PICKUP",
+    };
+    const jump = ORDER_JUMP[action];
+    if (jump) assertOrderTransition(delivery.order_status, jump);
 
     const vendorOwners = await sql<{ user_id: string }[]>`
       SELECT user_id FROM vendors WHERE id = ${delivery.vendor_id} LIMIT 1
@@ -213,9 +228,10 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       // never at payment, so a code can never go stale before handover.
       // The customer sees it on tracking from this moment; the rider never
       // sees it in API responses and must collect it from the customer.
-      const { generateDeliveryOtp, getOtpEnabled } = await import("@/server/orders");
+      const { generateDeliveryOtp, getOtpEnabled, hashDeliveryCode } = await import("@/server/orders");
       const otpEnabled = await getOtpEnabled().catch(() => true);
       const handoverCode = otpEnabled ? generateDeliveryOtp() : null;
+      const handoverHash = handoverCode ? hashDeliveryCode(handoverCode) : null;
       await sql.begin(async (tx) => {
         // Guarded transition: concurrent double-taps race here; the loser
         // gets zero rows back instead of minting a second code that would
@@ -228,7 +244,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         if (moved.length === 0) {
           throw ApiError.conflict("This delivery was already picked up.");
         }
-        await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = ${handoverCode}, require_otp = ${otpEnabled}, updated_at = NOW() WHERE id = ${delivery.order_id}`;
+        await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, updated_at = NOW() WHERE id = ${delivery.order_id}`;
         await tx`
           INSERT INTO order_status_history (order_id, status, note)
           VALUES (${delivery.order_id}, 'OUT_FOR_DELIVERY', ${parsed.data.note ?? "Rider picked up the order"})
@@ -271,13 +287,13 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       if (delivery.require_otp) {
         const supplied = (parsed.data.otp ?? parsed.data.code ?? "").trim();
         if (!supplied) throw ApiError.validation("Enter the 4-digit delivery code from the customer.");
-        const { DELIVERY_CODE_MAX_ATTEMPTS, verifyDeliveryOtp } = await import("@/server/orders");
+        const { DELIVERY_CODE_MAX_ATTEMPTS, verifyDeliveryCode } = await import("@/server/orders");
         if (delivery.delivery_code_attempts >= DELIVERY_CODE_MAX_ATTEMPTS) {
           throw ApiError.forbidden(
             `Too many wrong codes — this code is locked after ${DELIVERY_CODE_MAX_ATTEMPTS} attempts. Contact support to re-issue a new delivery code.`,
           );
         }
-        if (!verifyDeliveryOtp(delivery.delivery_otp, supplied)) {
+        if (!verifyDeliveryCode(supplied, delivery.delivery_code_hash, delivery.delivery_otp)) {
           await sql`UPDATE deliveries SET delivery_code_attempts = delivery_code_attempts + 1 WHERE id = ${id}`;
           throw ApiError.validation("Incorrect delivery code. It was not completed.");
         }
