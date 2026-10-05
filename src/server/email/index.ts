@@ -1,6 +1,12 @@
 import { getEnv } from "../env";
-import { buildResetEmail } from "./templates.js";
+import { buildResetEmail, buildVerificationReminderEmail, buildVerifyEmail } from "./auth-emails";
 import { buildOrderDeliveredEmail, type OrderDeliveredInput } from "./order-delivered";
+import {
+  buildPaymentConfirmedEmail,
+  buildVendorNewOrderEmail,
+  type PaymentConfirmedInput,
+  type VendorNewOrderInput,
+} from "./order-emails";
 import { signUnsubscribeToken } from "./unsubscribe";
 
 export type EmailMessage = {
@@ -17,6 +23,12 @@ export type EmailMessage = {
  */
 export const RESET_MINUTES = 30;
 export const OTP_MINUTES = 10;
+
+export { buildResetEmail, buildVerificationReminderEmail, buildVerifyEmail };
+export { buildOrderDeliveredEmail };
+export { buildPaymentConfirmedEmail, buildVendorNewOrderEmail };
+export type { PaymentConfirmedInput, VendorNewOrderInput };
+export { OTP_MINUTES as OTP_MINUTES_ALIAS };
 
 /**
  * Email dispatcher. Uses Brevo when BREVO_API_KEY is configured, else Resend
@@ -92,24 +104,36 @@ async function sendViaBrevo(message: EmailMessage, apiKey: string, emailFrom?: s
 }
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  const { subject, htmlContent, textContent } = buildResetEmail(resetUrl, RESET_MINUTES);
+  const { appUrl } = getEnv();
+  const { subject, htmlContent, textContent } = buildResetEmail(resetUrl, RESET_MINUTES, appUrl);
   await sendEmail({ to, subject, text: textContent, html: htmlContent });
 }
 
 export async function sendVerificationEmail(to: string, verifyUrl: string): Promise<void> {
-  await sendEmail({
-    to,
-    subject: "Verify your Savora Food email",
-    text: `Welcome to Savora Food!\n\nPlease confirm your email address to finish creating your account. This link expires in 24 hours:\n\n${verifyUrl}\n\nIf you did not create an account with Savora Food, you can safely ignore this email.`,
-  });
+  const { appUrl } = getEnv();
+  const built = buildVerifyEmail(verifyUrl, appUrl);
+  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
 }
 
 export async function sendVerificationReminderEmail(to: string, verifyUrl: string): Promise<void> {
-  await sendEmail({
-    to,
-    subject: "Verify your Savora Food email",
-    text: `It's been a little while since you joined Savora Food — your account is still waiting on email verification before it can be fully activated.\n\nConfirm your email now (link expires in 24 hours):\n\n${verifyUrl}\n\nIf you did not create an account with Savora Food, you can safely ignore this email.`,
-  });
+  const { appUrl } = getEnv();
+  const built = buildVerificationReminderEmail(verifyUrl, appUrl);
+  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+}
+
+export async function sendPaymentConfirmedEmail(to: string, orderNumber: string, orderId: string, total: number): Promise<void> {
+  const { appUrl } = getEnv();
+  const built = buildPaymentConfirmedEmail({ orderNumber, orderId, total, appUrl });
+  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+}
+
+export async function sendVendorNewOrderEmail(
+  to: string,
+  input: Omit<VendorNewOrderInput, "appUrl">,
+): Promise<void> {
+  const { appUrl } = getEnv();
+  const built = buildVendorNewOrderEmail({ ...input, appUrl });
+  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
 }
 
 export type OrderDeliveredEmailInput = Omit<
@@ -125,9 +149,10 @@ export type OrderDeliveredEmailInput = Omit<
 >;
 
 /**
- * Sends the redesigned "Order delivered" email via the configured sender
- * (Brevo when BREVO_API_KEY is set). Links are built from APP_URL and the
- * footer carries a signed one-click unsubscribe link for this customer.
+ * Sends the "Order delivered" email via the configured sender
+ * (Brevo when BREVO_API_KEY is set). Links are built from APP_URL.
+ * Transactional footer carries no unsubscribe link; the customer's
+ * email-updates preference is still honored below.
  *
  * Call ONLY after the rider's delivery-confirmation transaction commits —
  * never on a status change alone. Returns false when the customer opted out
@@ -140,7 +165,7 @@ export async function sendOrderDeliveredEmail(
   userId: string,
   input: OrderDeliveredEmailInput,
 ): Promise<boolean> {
-  const { appUrl, jwtSecret } = getEnv();
+  const { appUrl } = getEnv();
   try {
     const { db } = await import("../db");
     const rows = await db()<{ email_updates_opt_out: boolean | null }[]>`
@@ -159,7 +184,6 @@ export async function sendOrderDeliveredEmail(
     supportUrl: `${appUrl}/contact`,
     termsUrl: `${appUrl}/terms`,
     privacyUrl: `${appUrl}/privacy`,
-    unsubscribeUrl: `${appUrl}/unsubscribe?token=${encodeURIComponent(signUnsubscribeToken(userId, jwtSecret))}`,
   });
   await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
   return true;

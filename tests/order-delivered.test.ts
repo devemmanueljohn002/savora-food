@@ -67,7 +67,7 @@ describe("order delivered email", () => {
     expect(email.textContent).toContain("Total paid:");
   });
 
-  it("links CTAs and footer from APP_URL without doubled slashes", () => {
+  it("links CTAs and footer from APP_URL without doubled slashes (no unsubscribe on transactional)", () => {
     const { htmlContent, textContent } = buildOrderDeliveredEmail(sampleInput());
     for (const href of [
       `${APP}/dashboard?tab=orders`,
@@ -75,10 +75,11 @@ describe("order delivered email", () => {
       `${APP}/contact`,
       `${APP}/terms`,
       `${APP}/privacy`,
-      `${APP}/unsubscribe?token=abc`,
     ]) {
       expect(htmlContent).toContain(`href="${href}"`);
     }
+    // Strictly transactional: no unsubscribe link in order emails.
+    expect(htmlContent).not.toContain("/unsubscribe");
     expect(htmlContent).toContain("Rate your experience");
     expect(htmlContent).toContain("Track / view order");
     expect(htmlContent).not.toContain("//dashboard");

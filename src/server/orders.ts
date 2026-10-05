@@ -2,7 +2,8 @@ import { randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { db } from "./db";
 import { ApiError } from "./errors";
 import { notifyUser } from "./vendors";
-import { notifyWithEmail } from "./notify";
+import { lookupContact } from "./notify";
+import { sendPaymentConfirmedEmail, sendVendorNewOrderEmail } from "./email";
 import { assertOrderTransition } from "./order-transitions";
 import { assertPurchasable, getCartView } from "./queries/cart";
 import type {
@@ -1374,12 +1375,23 @@ export async function markOrderPaymentPaid(
 
   const ownerId = vendorUserId;
 
-  // Customer confirmation (payment verified → PAID): in-app + email receipt.
-  await notifyWithEmail(userId, {
+  // Customer confirmation (payment verified → PAID): in-app + templated email.
+  // Same trigger as before; template/design change only (Brevo untouched).
+  await notifyUser({
+    userId,
+    type: "ORDER",
     title: `Payment confirmed for ${orderNumber}`,
-    body: `Your payment of ₦${orderTotal.toLocaleString()} was verified. The vendor has been notified and will start preparing your order. You will receive a 4-digit delivery code once your rider picks it up — share it with the rider on arrival.`,
+    body: `Your payment was verified. The vendor has been notified and will start preparing your order.`,
     data: { orderId, status: "PAID" },
   }).catch(() => undefined);
+  try {
+    const contact = await lookupContact(userId);
+    if (contact.email) {
+      await sendPaymentConfirmedEmail(contact.email, orderNumber, orderId, orderTotal);
+    }
+  } catch {
+    // fail-open: never block payment confirmation on email
+  }
 
   // Vendor receives the order the moment it becomes PAID: in-app + email
   // so a vendor who never opens the dashboard still learns about it fast.
@@ -1399,25 +1411,42 @@ export async function markOrderPaymentPaid(
       WHERE o.id = ${orderId}
       LIMIT 1
     `;
-    const lines = await sql<{ name: string; quantity: number }[]>`
-      SELECT name, quantity FROM order_items WHERE order_id = ${orderId} ORDER BY created_at ASC
+    const lines = await sql<{ name: string; quantity: number; line_total: string }[]>`
+      SELECT name, quantity, line_total::text FROM order_items WHERE order_id = ${orderId} ORDER BY created_at ASC
     `;
     const info = detail[0];
     const customerName = info?.customer_name?.trim() || "Customer";
-    const itemsText = lines.map((line) => `${line.name} × ${line.quantity}`).join("\n") || "—";
-    const where = [info?.address, info?.city, info?.state].filter(Boolean).join(", ") || "No address on file";
-    await notifyWithEmail(ownerId, {
-      title: `NEW ORDER ${orderNumber}`,
-      body: [
-        `Customer: ${customerName}`,
-        "Items:",
-        itemsText,
-        `Food subtotal: ₦${Number(info?.subtotal ?? orderTotal).toLocaleString()}`,
-        `Delivery address: ${where}`,
-        "Accept the order to confirm, or reject it if you cannot fulfil it.",
-      ].join("\n"),
+    const items = lines.map((line) => ({
+      name: line.name,
+      quantity: Number(line.quantity) || 0,
+      lineTotal: Number(line.line_total) || 0,
+    }));
+    const foodSubtotal = Number(info?.subtotal ?? orderTotal) || orderTotal;
+    const address = info
+      ? { fullAddress: info.address, city: info.city, state: info.state }
+      : null;
+    await notifyUser({
+      userId: ownerId,
+      type: "ORDER",
+      title: `New order ${orderNumber} from ${customerName.trim().split(" ")[0] || "Customer"}`,
+      body: `New paid order ${orderNumber}. Open your vendor dashboard to accept or reject it.`,
       data: { orderId, status: "PAID" },
     }).catch(() => undefined);
+    try {
+      const contact = await lookupContact(ownerId);
+      if (contact.email) {
+        await sendVendorNewOrderEmail(contact.email, {
+          orderNumber,
+          orderId,
+          customerName,
+          items,
+          foodSubtotal,
+          address,
+        });
+      }
+    } catch {
+      // fail-open: vendor in-app notification already fired above
+    }
   }
 
   return { applied: true, alreadyPaid: false };
