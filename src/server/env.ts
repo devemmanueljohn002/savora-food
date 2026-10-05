@@ -22,6 +22,8 @@ type Env = {
   s3SecretAccessKey?: string;
   adminSeedEmail?: string;
   adminSeedPassword?: string;
+  authGoogleId?: string;
+  authGoogleSecret?: string;
 };
 
 let cached: Env | undefined;
@@ -89,6 +91,8 @@ export function getEnv(): Env {
     s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY?.trim() || undefined,
     adminSeedEmail: process.env.ADMIN_SEED_EMAIL?.trim() || "admin@savora.food",
     adminSeedPassword: process.env.ADMIN_SEED_PASSWORD?.trim() || undefined,
+    authGoogleId: process.env.AUTH_GOOGLE_ID?.trim() || undefined,
+    authGoogleSecret: process.env.AUTH_GOOGLE_SECRET?.trim() || undefined,
   };
 
   return cached;

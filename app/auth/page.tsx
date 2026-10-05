@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import { useNotify } from "@/components/ui/toast";
 import { dashboardForRole, login, register } from "@/lib/savora-api";
 
 type Tab = "in" | "up";
@@ -39,12 +40,31 @@ function GoogleMark() {
 function AuthCard() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "";
+  const oauthError = searchParams.get("error") ?? "";
+  const notify = useNotify();
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "up" ? "up" : "in");
   const [role, setRole] = useState<Role>("customer");
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const OAUTH_ERRORS: Record<string, string> = {
+    cancelled: "Google sign-in was cancelled. Try again or use email.",
+    unverified: "Your Google email is not verified. Verify it with Google first, or use email.",
+    linking: "That Google account is already linked elsewhere. Contact support.",
+    suspended: "This account is suspended. Contact support.",
+    setup: "Google sign-in is not set up yet. Use your email and password below.",
+    failed: "Google sign-in failed. Please try again or use email.",
+  };
+
+  useEffect(() => {
+    if (!oauthError) return;
+    const message = OAUTH_ERRORS[oauthError] ?? "Google sign-in failed. Please try again or use email.";
+    setError(message);
+    notify.error("Google sign-in failed", message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthError]);
 
   function selectTab(value: Tab) {
     setTab(value);
@@ -119,7 +139,11 @@ function AuthCard() {
           disabled={busy}
           onClick={() => {
             setError("");
-            setNotice("Google sign-in is not set up yet. Use your email and password below.");
+            setNotice("");
+            const target = next.startsWith("/") && !next.startsWith("//")
+              ? `/api/auth/google?next=${encodeURIComponent(next)}`
+              : "/api/auth/google";
+            window.location.href = target;
           }}
         >
           <GoogleMark />
