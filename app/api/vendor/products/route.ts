@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext, slugify, uniqueSlug } from "@/server/vendors";
+import { assertPersistentImageUrl, normalizeImageUrl } from "@/server/product-images";
 import { db } from "@/server/db";
 
 type ProductRow = {
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest) {
       if (!categories[0]) throw ApiError.validation("Choose a valid category.");
     }
 
+    // A local /uploads URL can never display in production (ephemeral FS) —
+    // fail loudly instead of saving a guaranteed broken image.
+    assertPersistentImageUrl(parsed.data.imageUrl);
+    const imageUrl = normalizeImageUrl(parsed.data.imageUrl) ?? null;
+
     const slug = await uniqueSlug("products", slugify(parsed.data.name, "product"));
     const sql = db();
     const rows = await sql<ProductRow[]>`
@@ -146,7 +152,7 @@ export async function POST(request: NextRequest) {
         ${vendor.id}, ${parsed.data.categoryId ?? null}, ${parsed.data.name}, ${slug},
         ${parsed.data.description ?? null}, ${parsed.data.shortDescription ?? null}, ${parsed.data.price},
         ${parsed.data.compareAtPrice ?? null}, ${parsed.data.costPrice ?? null},
-        ${parsed.data.imageUrl ?? null}, ${JSON.stringify(parsed.data.ingredients ?? [])}::jsonb,
+        ${imageUrl}, ${JSON.stringify(parsed.data.ingredients ?? [])}::jsonb,
         ${parsed.data.prepInfo ?? null}, ${parsed.data.preparationMinutes ?? null},
         ${parsed.data.availability ?? true}, ${parsed.data.stockQuantity ?? 0},
         ${parsed.data.isActive ?? true}, ${parsed.data.productType ?? null}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext } from "@/server/vendors";
+import { assertPersistentImageUrl, normalizeImageUrl } from "@/server/product-images";
 import { db } from "@/server/db";
 
 const updateSchema = z.object({
@@ -149,6 +150,8 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
 
     const d = parsed.data;
+    assertPersistentImageUrl(d.imageUrl);
+    const imageUrl = d.imageUrl === undefined ? undefined : (normalizeImageUrl(d.imageUrl) ?? null);
     const rows = await sql<{ id: string }[]>`
       UPDATE products SET
         name = COALESCE(${d.name ?? null}, name),
@@ -157,7 +160,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         price = COALESCE(${d.price ?? null}, price),
         compare_at_price = ${d.compareAtPrice === undefined ? current.compare_at_price : d.compareAtPrice},
         cost_price = ${d.costPrice === undefined ? current.cost_price : d.costPrice},
-        image_url = ${d.imageUrl === undefined ? current.image_url : d.imageUrl},
+        image_url = ${imageUrl === undefined ? current.image_url : imageUrl},
         ingredients = ${(d.ingredients === undefined ? current.ingredients : (d.ingredients ?? [])) as unknown as string},
         prep_info = ${d.prepInfo === undefined ? current.prep_info : d.prepInfo},
         preparation_minutes = ${d.preparationMinutes === undefined ? current.preparation_minutes : d.preparationMinutes},

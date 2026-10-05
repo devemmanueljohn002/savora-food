@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import ProductCard from "@/components/ProductCard";
+import ProductImage from "@/components/ProductImage";
 import ReviewsList from "@/components/ReviewsList";
 import ReviewForm from "@/components/ReviewForm";
 import BuyBox from "@/components/BuyBox";
@@ -81,7 +81,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     <PageShell>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <section className="container product">
-        <Image className="product-image" src={product.image ?? FALLBACK_IMAGE} alt={product.name} width={1200} height={900} priority sizes="(max-width: 1180px) 96vw, 560px" />
+        <ProductImage className="product-image" src={product.image} alt={product.name} width={1200} height={900} priority sizes="(max-width: 1180px) 96vw, 560px" />
         <div>
           {product.categoryName ? <span className="pill">{product.categoryName}</span> : null}
           <h1>{product.name}</h1>

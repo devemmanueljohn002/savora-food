@@ -2,10 +2,8 @@ import Link from "next/link";
 import { Plus, Star } from "lucide-react";
 import AddToCart from "./AddToCart";
 import FavoriteButton from "./FavoriteButton";
+import ProductImage from "./ProductImage";
 import type { CatalogProduct } from "@/lib/catalog-types";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80";
 
 export default function ProductCard({ item }: { item: CatalogProduct }) {
   const href = `/product/${item.slug}`;
@@ -15,7 +13,7 @@ export default function ProductCard({ item }: { item: CatalogProduct }) {
     <article className="product-card">
       <div className="product-card-media">
         <Link href={href} aria-label={item.name}>
-          <img className="product-card-img" src={item.image ?? FALLBACK_IMAGE} alt={item.name} />
+          <ProductImage className="product-card-img" src={item.image} alt={item.name} width={800} height={600} />
         </Link>
         <FavoriteButton productId={item.id} />
         {onSale ? <span className="deal-badge">Deal</span> : null}

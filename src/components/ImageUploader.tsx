@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { uploadImage } from "@/lib/savora-api";
 
+const CLIENT_MAX_BYTES = 5 * 1024 * 1024;
+const CLIENT_ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
 export default function ImageUploader({ value, onChange, label }: {
   value: string | null;
   onChange: (url: string | null) => void;
@@ -13,6 +16,16 @@ export default function ImageUploader({ value, onChange, label }: {
 
   async function pick(file: File | undefined) {
     if (!file) return;
+    // Instant client-side check (the API re-validates); only upload on success
+    // so a failed upload can never leave a stale URL on the product.
+    if (!CLIENT_ALLOWED.has(file.type)) {
+      setError("Only JPEG, PNG, WebP or GIF images are allowed.");
+      return;
+    }
+    if (file.size <= 0 || file.size > CLIENT_MAX_BYTES) {
+      setError("Image must be smaller than 5 MB.");
+      return;
+    }
     setError("");
     setBusy(true);
     try {

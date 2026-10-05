@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
-import Image from "next/image";
+import ProductImage from "@/components/ProductImage";
 import { useCart, useRemoveCartItem, useUpdateCartItem } from "@/lib/api/hooks";
 
 export default function Page() {
@@ -49,8 +49,8 @@ export default function Page() {
               ) : (
                 items.map((item) => (
                   <div className="card cart-item" key={item.id}>
-                    <Image
-                      src={item.product.image ?? "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80"}
+                    <ProductImage
+                      src={item.product.image}
                       alt={item.product.name}
                       width={110}
                       height={90}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" fill="#FAF8F4"/>
+  <rect x="48" y="48" width="1104" height="804" rx="32" fill="#FFFDF9" stroke="#E6DDD3" stroke-width="4"/>
+  <g fill="none" stroke="#FF6500" stroke-width="18" stroke-linecap="round">
+    <path d="M420 400a180 180 0 0 1 360 0"/>
+    <line x1="360" y1="400" x2="840" y2="400"/>
+    <line x1="600" y1="220" x2="600" y2="180"/>
+  </g>
+  <circle cx="600" cy="180" r="14" fill="#F7B733"/>
+  <text x="600" y="540" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="bold" fill="#302B27">Savora Food</text>
+  <text x="600" y="610" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="36" fill="#716B65">Image coming soon</text>
+</svg>
