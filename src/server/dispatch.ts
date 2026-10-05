@@ -205,7 +205,7 @@ type BoardJobRow = {
   drop_zone: string | null;
 };
 
-function toBoardJob(row: BoardJobRow, sharePct: number): BoardJob {
+export function toBoardJob(row: BoardJobRow, sharePct: number): BoardJob {
   const payout = boardPayout(Number(row.delivery_fee), sharePct, Number(row.payout_bonus));
   return {
     id: row.id,

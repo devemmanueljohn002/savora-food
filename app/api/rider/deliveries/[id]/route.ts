@@ -153,7 +153,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       SELECT d.id, d.status, d.delivery_code_attempts,
              o.id AS order_id, o.order_number, o.status AS order_status,
              o.user_id AS customer_id, o.vendor_id,
-             o.delivery_otp, COALESCE(o.require_otp, FALSE) AS require_otp
+              o.delivery_otp, o.delivery_code_hash, COALESCE(o.require_otp, FALSE) AS require_otp
       FROM deliveries d
       JOIN orders o ON o.id = d.order_id
       WHERE d.id = ${id} AND d.delivery_partner_id = ${rider.id}
@@ -244,7 +244,17 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         if (moved.length === 0) {
           throw ApiError.conflict("This delivery was already picked up.");
         }
-        await tx`UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, updated_at = NOW() WHERE id = ${delivery.order_id}`;
+        // Persisted-before-email proof: the hash must land in the same
+        // transaction. If it didn't (and a code is required), roll everything
+        // back so we never email a code that cannot verify.
+        const stored = await tx<{ delivery_code_hash: string | null }[]>`
+          UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, updated_at = NOW()
+          WHERE id = ${delivery.order_id}
+          RETURNING delivery_code_hash
+        `;
+        if (otpEnabled && !stored[0]?.delivery_code_hash) {
+          throw ApiError.internal("Could not issue the delivery code. Please try pickup again.");
+        }
         await tx`
           INSERT INTO order_status_history (order_id, status, note)
           VALUES (${delivery.order_id}, 'OUT_FOR_DELIVERY', ${parsed.data.note ?? "Rider picked up the order"})
