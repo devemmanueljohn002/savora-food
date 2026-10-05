@@ -5,6 +5,16 @@ import { listLocations, listVendorCategories, listVendorCities, listVendors } fr
 import { parseFilters, type RawSearchParams } from "@/lib/catalog-params";
 import type { VendorSort } from "@/lib/catalog-types";
 
+import type { Metadata } from "next";
+import { absoluteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: 'Food vendors near you',
+  description: 'Browse trusted kitchens and restaurants on Savora Food.',
+  alternates: { canonical: absoluteUrl('/vendors') },
+  openGraph: { title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.', url: absoluteUrl('/vendors') },
+};
+
 const VENDOR_SORTS = [
   { value: "", label: "Recommended" },
   { value: "rating", label: "Highest rated" },

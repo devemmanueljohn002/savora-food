@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import Image from "next/image";
 import { useNotify } from "@/components/ui/toast";
 import { dashboardForRole, login, register } from "@/lib/savora-api";
 
@@ -128,7 +129,7 @@ function AuthCard() {
 
   return (
     <div className="auth-wrap">
-      <img className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} />
+      <Image className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} priority />
       <h1 className="auth-title">Your Food. Your Choice. Delivered.</h1>
       <p className="auth-sub">Sign in or create an account to continue.</p>
 

@@ -4,6 +4,16 @@ import { listProductFacets, listProducts } from "@/server/queries/catalog";
 import { parseFilters, type RawSearchParams } from "@/lib/catalog-params";
 import type { ProductSort } from "@/lib/catalog-types";
 
+import type { Metadata } from "next";
+import { absoluteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: 'Snacks & small chops delivery in Nigeria',
+  description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.',
+  alternates: { canonical: absoluteUrl('/snacks') },
+  openGraph: { title: 'Snacks & small chops delivery in Nigeria', description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.', url: absoluteUrl('/snacks') },
+};
+
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const { q, city, sort, category, vendorId, maxPrice, minRating, page } = parseFilters(await searchParams);
   const [result, facets] = await Promise.all([

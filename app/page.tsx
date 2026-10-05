@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, type LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
@@ -5,6 +6,7 @@ import HomeHero from "@/components/HomeHero";
 import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CategoryCard from "@/components/CategoryCard";
+import { absoluteUrl } from "@/lib/site-url";
 import {
   listCategories,
   listCateringPackages,
@@ -62,6 +64,33 @@ const TESTIMONIALS = [
   },
 ];
 
+export const metadata: Metadata = {
+  title: "Savora Food | Your Food. Your Choice. Delivered.",
+  description:
+    "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens. Fast delivery across Nigeria.",
+  alternates: { canonical: absoluteUrl("/") },
+  openGraph: {
+    title: "Savora Food | Your Food. Your Choice. Delivered.",
+    description:
+      "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",
+    url: absoluteUrl("/"),
+  },
+  twitter: {
+    title: "Savora Food | Your Food. Your Choice. Delivered.",
+    description:
+      "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",
+  },
+};
+
+const ORG_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Savora Food",
+  slogan: "Your Food. Your Choice. Delivered.",
+  url: absoluteUrl("/"),
+  logo: absoluteUrl("/savora-logo-wide.png"),
+};
+
 export default async function Home() {
   const [categories, featuredResult, vendorResult, packages, locations] = await Promise.all([
     listCategories(),
@@ -83,6 +112,7 @@ export default async function Home() {
 
   return (
     <PageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }} />
       <HomeHero />
 
       <section className="section container">

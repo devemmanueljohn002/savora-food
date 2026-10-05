@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
@@ -6,9 +8,34 @@ import ReviewsList from "@/components/ReviewsList";
 import ReviewForm from "@/components/ReviewForm";
 import BuyBox from "@/components/BuyBox";
 import { getProductBySlug, listProductReviews, listProducts } from "@/server/queries/catalog";
+import { absoluteUrl } from "@/lib/site-url";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
+  if (!product) return { title: "Product not found" };
+  const title = `${product.name} | ${product.vendorName}`;
+  const description =
+    product.description ??
+    product.shortDescription ??
+    `Order ${product.name} from ${product.vendorName} on Savora Food.`;
+  const url = absoluteUrl(`/product/${product.slug}`);
+  const image = product.image ?? FALLBACK_IMAGE;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "website", images: [{ url: image, alt: product.name }] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
+  };
+}
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -21,11 +48,40 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   ]);
 
   const onSale = product.compareAtPrice !== null && product.compareAtPrice > product.price;
+  const productJsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description ?? product.shortDescription ?? undefined,
+    image: product.image ?? undefined,
+    url: absoluteUrl(`/product/${product.slug}`),
+    brand: { "@type": "Brand", name: product.vendorName },
+    offers: {
+      "@type": "Offer",
+      url: absoluteUrl(`/product/${product.slug}`),
+      priceCurrency: "NGN",
+      price: product.price,
+      availability: product.availability
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+    },
+    // Only real ratings — never emitted when the product has none.
+    ...(product.ratingCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.rating.toFixed(1),
+            reviewCount: product.ratingCount,
+          },
+        }
+      : {}),
+  };
 
   return (
     <PageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <section className="container product">
-        <img className="product-image" src={product.image ?? FALLBACK_IMAGE} alt={product.name} />
+        <Image className="product-image" src={product.image ?? FALLBACK_IMAGE} alt={product.name} width={1200} height={900} priority sizes="(max-width: 1180px) 96vw, 560px" />
         <div>
           {product.categoryName ? <span className="pill">{product.categoryName}</span> : null}
           <h1>{product.name}</h1>
@@ -37,7 +93,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             <span className="pill">{product.availability ? "Available now" : "Unavailable"}</span>
           </p>
           <p className="muted">{product.description ?? product.shortDescription ?? "Freshly prepared and delivered with care."}</p>
-          <h1 className="price">₦{product.price.toLocaleString()}</h1>
+          <p className="price" style={{ fontSize: 30, margin: "12px 0 0" }}>₦{product.price.toLocaleString()}</p>
           {onSale ? (
             <p className="muted">
               <del>₦{product.compareAtPrice!.toLocaleString()}</del> was

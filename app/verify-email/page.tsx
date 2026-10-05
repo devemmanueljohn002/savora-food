@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { MailCheck } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import Image from "next/image";
 import { resendVerification, verifyEmail } from "@/lib/savora-api";
 
 type Status = "idle" | "working" | "done" | "error";
@@ -55,7 +56,7 @@ function VerifyPanel() {
 
   return (
     <div className="auth-wrap">
-      <img className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} />
+      <Image className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} priority />
       <h1 className="auth-title">Verify your email</h1>
       <p className="auth-sub">Confirm your address to fully activate your account.</p>
 

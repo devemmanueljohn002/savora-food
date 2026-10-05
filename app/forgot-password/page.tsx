@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import Image from "next/image";
 import { requestPasswordReset } from "@/lib/savora-api";
 
 export default function ForgotPasswordPage() {
@@ -29,7 +30,7 @@ export default function ForgotPasswordPage() {
   return (
     <PageShell>
       <div className="auth-wrap">
-        <img className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} />
+        <Image className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} priority />
         <h1 className="auth-title">Forgot your password?</h1>
         <p className="auth-sub">Enter your account email and we will send you a reset link.</p>
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import Image from "next/image";
 import { resetPassword } from "@/lib/savora-api";
 
 function ResetForm() {
@@ -36,7 +37,7 @@ function ResetForm() {
 
   return (
     <div className="auth-wrap">
-      <img className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} />
+      <Image className="auth-logo" src="/savora-logo-stacked.png" alt="Savora Food" width={160} height={64} priority />
       <h1 className="auth-title">Set a new password</h1>
       <p className="auth-sub">Choose a strong password of at least 8 characters.</p>
 

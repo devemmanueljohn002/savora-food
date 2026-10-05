@@ -4,6 +4,16 @@ import { listProductFacets, listProducts } from "@/server/queries/catalog";
 import { parseFilters, type RawSearchParams } from "@/lib/catalog-params";
 import type { ProductSort } from "@/lib/catalog-types";
 
+import type { Metadata } from "next";
+import { absoluteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: 'Drinks & beverages delivery in Nigeria',
+  description: 'Zobo, chapman, fresh juices and chilled drinks from beverage makers across Nigeria.',
+  alternates: { canonical: absoluteUrl('/drinks') },
+  openGraph: { title: 'Drinks & beverages delivery in Nigeria', description: 'Zobo, chapman, fresh juices and chilled drinks from beverage makers across Nigeria.', url: absoluteUrl('/drinks') },
+};
+
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const { q, city, sort, category, vendorId, maxPrice, minRating, page } = parseFilters(await searchParams);
   const [result, facets] = await Promise.all([

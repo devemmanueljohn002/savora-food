@@ -6,6 +6,8 @@ type Env = {
   refreshTokenTtlDays: number;
   appUrl: string;
   apiUrl: string;
+  /** Public origin override; falls back to appUrl when unset. */
+  siteUrl?: string;
   paystackSecretKey?: string;
   paystackPublicKey?: string;
   resendApiKey?: string;
@@ -77,6 +79,7 @@ export function getEnv(): Env {
     refreshTokenTtlDays: numberFromEnv(process.env.REFRESH_TOKEN_TTL_DAYS, 30),
     appUrl: resolveAppUrl(),
     apiUrl: process.env.API_URL?.trim() || "/api",
+    siteUrl: process.env.SITE_URL?.trim()?.replace(/\/+$/, "") || undefined,
     paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() || undefined,
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() || undefined,
     resendApiKey: process.env.RESEND_API_KEY?.trim() || undefined,

@@ -1,13 +1,24 @@
 import Link from "next/link";
+import Image from "next/image";
 import PageShell from "@/components/PageShell";
 import { Heart, Rocket, ShieldCheck, Users } from "lucide-react";
 import heroImage from "@/assets/hero-food.jpg";
+
+import type { Metadata } from "next";
+import { absoluteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: 'About Savora Food',
+  description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.",
+  alternates: { canonical: absoluteUrl('/about') },
+  openGraph: { title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.", url: absoluteUrl('/about') },
+};
 
 export default function Page() {
   return (
     <PageShell>
       <section className="about-hero">
-        <img className="about-hero-img" src={heroImage.src} alt="Nigerian dishes spread on a table" />
+        <Image className="about-hero-img" src={heroImage} alt="Nigerian dishes spread on a table" priority sizes="100vw" />
         <div className="about-hero-shade" aria-hidden="true" />
         <div className="about-hero-body">
           <h1>We&rsquo;re building Nigeria&rsquo;s most loved food marketplace</h1>
