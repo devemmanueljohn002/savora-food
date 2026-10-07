@@ -94,7 +94,6 @@ export async function GET(request: NextRequest) {
       user_email: string;
       verification_method: string | null;
       verification_status: string | null;
-      category: string | null;
       product_count: number;
       order_count: number;
     }[]>`
@@ -103,11 +102,6 @@ export async function GET(request: NextRequest) {
              v.is_featured, v.created_at,
              u.email AS user_email,
              vv.method AS verification_method, vv.status AS verification_status,
-             (
-               SELECT c.name FROM vendor_categories vc
-               JOIN categories c ON c.id = vc.category_id
-               WHERE vc.vendor_id = v.id ORDER BY c.name ASC LIMIT 1
-             ) AS category,
              (SELECT COUNT(*) FROM products p WHERE p.vendor_id = v.id) AS product_count,
              (SELECT COUNT(*) FROM orders o WHERE o.vendor_id = v.id) AS order_count
       FROM vendors v JOIN users u ON u.id = v.user_id
@@ -149,7 +143,6 @@ export async function GET(request: NextRequest) {
           createdAt: row.created_at,
           productCount: Number(row.product_count),
           orderCount: Number(row.order_count),
-          category: row.category,
           verification: {
             method: row.verification_method ?? "BVN",
             status: row.verification_status ?? "NOT_SUBMITTED",
