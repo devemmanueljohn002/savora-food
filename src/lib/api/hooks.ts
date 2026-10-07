@@ -31,6 +31,7 @@ import {
   getConsumerOverview,
   getAddresses,
   getAdminCustomer,
+  getAdminDashboard,
   getAdminOrder,
   getAdminOverview,
   getAdminRider,
@@ -1166,6 +1167,18 @@ export function useAdminOverview() {
     queryFn: getAdminOverview,
     retry: false,
     staleTime: 60_000,
+  });
+}
+
+export function useAdminDashboard() {
+  return useQuery({
+    queryKey: [...adminKeys.overview, "dashboard"] as const,
+    queryFn: getAdminDashboard,
+    retry: false,
+    // Dashboard always shows live data: never serve stale rows.
+    staleTime: 0,
+    gcTime: 60_000,
+    refetchOnMount: "always",
   });
 }
 

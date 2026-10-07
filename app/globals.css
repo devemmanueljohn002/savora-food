@@ -737,3 +737,53 @@ body{overflow-x:clip}
 .payout-empty{padding:28px 20px}
 .payout-empty .empty-state-desc{margin-bottom:0}
 .empty-state-icon svg{width:28px;height:28px}
+
+/* ── Admin console (dashboard shell + panels) ─────────────────────── */
+/* Built only from the app theme tokens above (:root): --orange primary,
+   --ink dark surface, --paper page, --card, --line, --muted, --gold,
+   --success/--danger/--warning and their soft backgrounds. */
+.admin-app{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:100vh}
+.admin-side{background:var(--ink);color:#f3ede6;padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.admin-brand{font-weight:800;font-size:20px;padding:4px 10px 20px;display:flex;gap:8px;align-items:center;color:#fffdf9}
+.admin-brand-mark{width:28px;height:28px;border-radius:8px;background:var(--orange);display:inline-block;flex:none}
+.admin-nav{display:flex;flex-direction:column;gap:2px}
+.admin-nav-link{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;color:#cfc6bc;margin-bottom:2px;font-size:14px}
+.admin-nav-link:hover{background:rgba(255,255,255,.07);color:#fffdf9}
+.admin-nav-link.on{background:var(--orange);color:#fff;font-weight:600}
+.admin-nav-badge{background:#fffdf9;color:var(--orange);border-radius:99px;font-size:11px;font-weight:700;padding:0 7px}
+.admin-main{padding:24px 28px;min-width:0;max-width:100%;overflow-x:clip}
+.admin-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.admin-title{font-size:22px;margin:0}
+.admin-sub{color:var(--muted);margin:4px 0 0}
+.admin-me{display:flex;align-items:center;gap:10px}
+.admin-avatar{width:34px;height:34px;font-size:14px}
+.admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:20px}
+.admin-stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.admin-stat small{color:var(--muted)}
+.admin-stat strong{display:block;font-size:26px;margin:2px 0;overflow-wrap:anywhere}
+.admin-stat .delta{font-size:12px;color:var(--success)}
+.admin-stat.hot{background:var(--orange);border-color:var(--orange);color:#fff}
+.admin-stat.hot small{color:#ffe3d1}
+.admin-stat.hot .delta{color:#fff}
+.admin-stat .delta.bad{color:var(--danger)}
+.admin-stat.hot .delta.bad{color:#fff}
+.admin-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;align-items:start}
+.admin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;min-width:0}
+.admin-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.admin-card-head h2{font-size:16px;margin:0}
+.admin-side-col{display:grid;gap:16px;align-content:start;min-width:0}
+.admin-list{list-style:none;margin:0;padding:0}
+.admin-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.admin-list li:last-child{border-bottom:0}
+.admin-list small{color:var(--muted);display:block}
+.admin-activity-text{text-transform:capitalize}
+@media(max-width:900px){
+  .admin-app{grid-template-columns:minmax(0,1fr)}
+  .admin-side{position:static;height:auto;padding:10px}
+  .admin-brand{padding-bottom:8px}
+  .admin-nav{flex-direction:row;gap:4px;overflow-x:auto;padding-bottom:4px}
+  .admin-nav-link{white-space:nowrap;margin-bottom:0}
+  .admin-main{padding:16px}
+  .admin-stats{grid-template-columns:1fr 1fr}
+  .admin-grid{grid-template-columns:minmax(0,1fr)}
+}

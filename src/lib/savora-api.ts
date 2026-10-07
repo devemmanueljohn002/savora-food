@@ -863,6 +863,51 @@ export function getAdminOverview() {
   return apiGet<AdminOverview>("/admin/overview").then((result) => result.data);
 }
 
+export type AdminDashboard = {
+  admin: { firstName: string | null; email: string };
+  stats: {
+    pendingVendors: number;
+    revenueMonth: number;
+    platformEarningsMonth: number;
+    ordersToday: number;
+    paidToday: number;
+    activeRiders: number;
+    ridersOnDelivery: number;
+    failedPayouts: number;
+  };
+  payoutsNeedingAction: {
+    failedWithdrawals: {
+      id: string;
+      ownerType: string;
+      ownerName: string;
+      amount: number;
+      reference: string;
+      failureReason: string | null;
+      createdAt: string;
+    }[];
+    heldPayouts: {
+      id: string;
+      vendorName: string;
+      reference: string;
+      net: number;
+      status: string;
+      createdAt: string;
+    }[];
+    pendingWithdrawals: {
+      id: string;
+      ownerType: string;
+      ownerName: string;
+      amount: number;
+      createdAt: string;
+    }[];
+  };
+  recentActivity: { id: string; text: string; detail: string; createdAt: string }[];
+};
+
+export function getAdminDashboard() {
+  return apiGet<AdminDashboard>("/admin/dashboard").then((result) => result.data);
+}
+
 export type VendorVerificationView = {
   method: string;
   status: string;
@@ -890,6 +935,7 @@ export type AdminVendor = {
   createdAt: string;
   productCount: number;
   orderCount: number;
+  category: string | null;
   verification: { method: string; status: string };
 };
 
