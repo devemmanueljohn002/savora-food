@@ -35,6 +35,16 @@ export default function AdminDashboardPage() {
           <span>30 days · {data.last30Days.orders} orders</span>
         </div>
         <div className="stat">
+          <b>{naira(data.month.revenue)}</b>
+          <span>
+            This month · {data.month.paidOrders} paid order{data.month.paidOrders === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="stat">
+          <b>{naira(data.month.platformEarnings)}</b>
+          <span>Platform earnings · this month</span>
+        </div>
+        <div className="stat">
           <b>{pendingVendors}</b>
           <span>Vendors awaiting approval</span>
         </div>
@@ -51,6 +61,9 @@ export default function AdminDashboardPage() {
       <div className="two-col" style={{ marginTop: 32 }}>
         <div>
           <h2>Revenue · last 14 days</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Paid and delivered orders only — pending, cancelled and refunded orders are excluded.
+          </p>
           <div className="card card-body">
             {data.revenueByDay.map((row) => (
               <div key={row.day} style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0" }}>

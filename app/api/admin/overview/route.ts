@@ -23,13 +23,21 @@ export async function GET(request: NextRequest) {
       gross_30d: string;
       orders_30d: string;
       open_catering: string;
+      month_orders: string;
+      month_paid_orders: string;
+      month_revenue: string;
+      month_earnings: string;
     }[]>`
       SELECT
         COUNT(*) FILTER (WHERE created_at > NOW() - make_interval(hours => 24))::text AS today_orders,
         COALESCE(SUM(total) FILTER (WHERE created_at > NOW() - make_interval(hours => 24) AND status NOT IN ('CANCELLED','REFUNDED','PENDING_PAYMENT')), 0) AS today_gross,
         COALESCE(SUM(total) FILTER (WHERE created_at > NOW() - make_interval(days => 30) AND status NOT IN ('CANCELLED','REFUNDED','PENDING_PAYMENT')), 0) AS gross_30d,
         COUNT(*) FILTER (WHERE created_at > NOW() - make_interval(days => 30))::text AS orders_30d,
-        (SELECT COUNT(*)::text FROM catering_requests WHERE status IN ('SUBMITTED','UNDER_REVIEW')) AS open_catering
+        (SELECT COUNT(*)::text FROM catering_requests WHERE status IN ('SUBMITTED','UNDER_REVIEW')) AS open_catering,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::text AS month_orders,
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()) AND status IN ('PAID','DELIVERED'))::text AS month_paid_orders,
+        COALESCE(SUM(total) FILTER (WHERE created_at >= date_trunc('month', NOW()) AND status IN ('PAID','DELIVERED')), 0) AS month_revenue,
+        COALESCE((SELECT SUM(commission_amount) FROM order_settlements WHERE created_at >= date_trunc('month', NOW())), 0) AS month_earnings
       FROM orders
     `;
     const revenueByDay = await sql<{ day: string; gross: string }[]>`
@@ -59,6 +67,15 @@ export async function GET(request: NextRequest) {
         ridersByVerification: riders.map((row) => ({ status: row.verification_status, count: Number(row.count) })),
         today: { orders: Number(orders[0]?.today_orders ?? 0), gross: Number(orders[0]?.today_gross ?? 0) },
         last30Days: { orders: Number(orders[0]?.orders_30d ?? 0), gross: Number(orders[0]?.gross_30d ?? 0) },
+        // Revenue counts PAID and DELIVERED orders only; platform earnings
+        // come from the per-order commission rule (see src/server/money.ts,
+        // stored in order_settlements.commission_amount).
+        month: {
+          orders: Number(orders[0]?.month_orders ?? 0),
+          paidOrders: Number(orders[0]?.month_paid_orders ?? 0),
+          revenue: Number(orders[0]?.month_revenue ?? 0),
+          platformEarnings: Number(orders[0]?.month_earnings ?? 0),
+        },
         openCatering: Number(orders[0]?.open_catering ?? 0),
         revenueByDay: revenueByDay.map((row) => ({ day: row.day, gross: Number(row.gross) })),
         recentOrders: recentOrders.map((row) => ({

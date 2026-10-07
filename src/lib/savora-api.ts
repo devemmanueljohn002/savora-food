@@ -847,6 +847,7 @@ export type AdminOverview = {
   ridersByVerification: { status: string; count: number }[];
   today: { orders: number; gross: number };
   last30Days: { orders: number; gross: number };
+  month: { orders: number; paidOrders: number; revenue: number; platformEarnings: number };
   openCatering: number;
   revenueByDay: { day: string; gross: number }[];
   recentOrders: {
