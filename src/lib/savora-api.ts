@@ -11,6 +11,7 @@ import type {
   ProductType,
   VendorSort,
 } from "./catalog-types";
+import { getDashboardRouteForRole } from "./role-routes";
 import type {
   Address,
   AddressInput,
@@ -304,11 +305,9 @@ export function updateVendorOnboarding(input: VendorOnboardingInput) {
 }
 
 export function dashboardForRole(role?: string): string {
-  if (role === "VENDOR") return "/vendor/dashboard";
-  if (role === "DELIVERY_PARTNER") return "/rider/dashboard";
-  if (role === "ADMIN") return "/admin/dashboard";
-  if (role === "SUPER_ADMIN") return "/super-admin/dashboard";
-  return "/dashboard";
+  // Single source of truth: post-login landing is the role's working dashboard.
+  // (CUSTOMER -> /dashboard; staff roles -> their dashboards.)
+  return getDashboardRouteForRole(role);
 }
 
 // ── Vendor ──────────────────────────────────────────────────────────────────
@@ -864,15 +863,26 @@ export function getAdminOverview() {
   return apiGet<AdminOverview>("/admin/overview").then((result) => result.data);
 }
 
+export type VendorVerificationView = {
+  method: string;
+  status: string;
+  failureReason?: string | null;
+  dojahReference?: string | null;
+  verifiedAt?: string | null;
+};
+
 export type AdminVendor = {
   id: string;
   businessName: string;
   slug: string;
   ownerName: string | null;
   email: string | null;
+  userEmail: string;
   phone: string | null;
   city: string | null;
+  state: string | null;
   status: string;
+  statusReason: string | null;
   commissionRate: number;
   ratingAverage: number;
   ratingCount: number;
@@ -880,6 +890,19 @@ export type AdminVendor = {
   createdAt: string;
   productCount: number;
   orderCount: number;
+  verification: { method: string; status: string };
+};
+
+export type VendorQueueCounts = {
+  pending: number;
+  approved: number;
+  rejected: number;
+  suspended: number;
+};
+
+export type VendorQueueResult = Paged<AdminVendor> & {
+  counts: VendorQueueCounts;
+  tab: string;
 };
 
 export function listAdminVendors(params: { status?: string; search?: string; page?: number; limit?: number } = {}) {
@@ -888,11 +911,37 @@ export function listAdminVendors(params: { status?: string; search?: string; pag
   ).then(paged);
 }
 
+export function listAdminVendorQueue(
+  params: { tab?: string; search?: string; page?: number; limit?: number } = {},
+) {
+  return apiGet<AdminVendor[]>(
+    `/admin/vendors${queryString({ tab: params.tab, search: params.search, page: params.page, limit: params.limit })}`,
+  ).then((result) => {
+    const meta = (result.meta ?? {}) as Record<string, unknown>;
+    const counts = meta.counts as VendorQueueCounts | undefined;
+    return {
+      ...paged(result),
+      counts: counts ?? { pending: 0, approved: 0, rejected: 0, suspended: 0 },
+      tab: typeof meta.tab === "string" ? meta.tab : (params.tab ?? "pending"),
+    } satisfies VendorQueueResult;
+  });
+}
+
+export type AdminVendorAction = {
+  id: string;
+  adminEmail: string | null;
+  action: string;
+  reason: string | null;
+  createdAt: string;
+};
+
 export type AdminVendorDetail = AdminVendor & {
-  userEmail: string;
   description: string | null;
   address: string | null;
-  state: string | null;
+  photoUrl: string | null;
+  photoExpiresAt: string | null;
+  verification: VendorVerificationView;
+  history: AdminVendorAction[];
   documents: { id: string; kind: string; url: string; status: string; createdAt: string }[];
 };
 
@@ -900,10 +949,11 @@ export function getAdminVendor(id: string) {
   return apiGet<AdminVendorDetail>(`/admin/vendors/${encodeURIComponent(id)}`).then((result) => result.data);
 }
 
-export function updateAdminVendor(
-  id: string,
-  input: { status?: string; commissionRate?: number; isFeatured?: boolean },
-) {
+export type AdminVendorActionInput =
+  | { action: "approve" | "reject" | "suspend" | "reactivate" | "override"; reason?: string }
+  | { status?: string; commissionRate?: number; isFeatured?: boolean };
+
+export function updateAdminVendor(id: string, input: AdminVendorActionInput) {
   return apiSend<{ updated: boolean; id: string; status: string }>(
     `/admin/vendors/${encodeURIComponent(id)}`,
     "PATCH",

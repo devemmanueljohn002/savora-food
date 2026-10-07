@@ -79,6 +79,7 @@ import {
   listAdminProducts,
   listAdminRiders,
   listAdminVendors,
+  listAdminVendorQueue,
   listAuditLog,
   listPlatformSettings,
   listProductVariants,
@@ -1173,7 +1174,22 @@ export function useAdminVendors(params: { status?: string; search?: string; page
     queryKey: [...adminKeys.vendors, params] as const,
     queryFn: () => listAdminVendors(params),
     retry: false,
-    staleTime: 30_000,
+    // Approval queue always shows live data: never serve stale rows.
+    staleTime: 0,
+    gcTime: 60_000,
+    refetchOnMount: "always",
+  });
+}
+
+export function useAdminVendorQueue(params: { tab?: string; search?: string; page?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: [...adminKeys.vendors, "queue", params] as const,
+    queryFn: () => listAdminVendorQueue(params),
+    retry: false,
+    // Approval queue always shows live data: never serve stale rows.
+    staleTime: 0,
+    gcTime: 60_000,
+    refetchOnMount: "always",
   });
 }
 
@@ -1183,6 +1199,9 @@ export function useAdminVendor(id: string) {
     queryFn: () => getAdminVendor(id),
     enabled: Boolean(id),
     retry: false,
+    staleTime: 0,
+    gcTime: 60_000,
+    refetchOnMount: "always",
   });
 }
 
