@@ -19,7 +19,7 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-type PendingAction = {
+export type PendingAction = {
   vendor: AdminVendor;
   action: "approve" | "reject" | "suspend" | "reactivate" | "override";
 };
@@ -66,7 +66,7 @@ const ACTION_META: Record<
   },
 };
 
-function verificationBadge(vendor: AdminVendor) {
+export function verificationBadge(vendor: AdminVendor) {
   const status = vendor.verification.status;
   if (status === "VERIFIED") {
     return <span className="badge badge-success">{vendor.verification.method} verified</span>;
@@ -90,7 +90,7 @@ function statusBadge(status: string) {
   return <span className={tone}>{status.replaceAll("_", " ")}</span>;
 }
 
-function ActionDialog({ pending, onClose }: { pending: PendingAction | null; onClose: () => void }) {
+export function VendorActionDialog({ pending, onClose }: { pending: PendingAction | null; onClose: () => void }) {
   const notify = useNotify();
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -166,7 +166,7 @@ function ActionDialog({ pending, onClose }: { pending: PendingAction | null; onC
   );
 }
 
-function RowActions({ vendor, onAct }: { vendor: AdminVendor; onAct: (a: PendingAction) => void }) {
+export function VendorRowActions({ vendor, onAct }: { vendor: AdminVendor; onAct: (a: PendingAction) => void }) {
   const failed = vendor.verification.status === "FAILED";
   return (
     <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
@@ -252,6 +252,9 @@ export default function VendorQueueClient() {
 
   return (
     <AdminShell title="Vendors" sub="Review kitchen applications and manage live kitchens.">
+      <p style={{ marginTop: 0 }}>
+        <Link href="/admin/vendors/pending">Pending review queue →</Link>
+      </p>
       <nav className="vendor-tabs" aria-label="Vendor status">
         {TABS.map((t) => (
           <button
@@ -337,13 +340,13 @@ export default function VendorQueueClient() {
           {
             key: "actions",
             header: "Actions",
-            render: (row) => <RowActions vendor={row} onAct={setPending} />,
+            render: (row) => <VendorRowActions vendor={row} onAct={setPending} />,
           },
         ]}
       />
       <Pager page={queue.data?.page ?? 1} totalPages={queue.data?.totalPages ?? 1} onPage={setPage} />
       {pending && (
-        <ActionDialog key={`${pending.vendor.id}-${pending.action}`} pending={pending} onClose={() => setPending(null)} />
+        <VendorActionDialog key={`${pending.vendor.id}-${pending.action}`} pending={pending} onClose={() => setPending(null)} />
       )}
     </AdminShell>
   );

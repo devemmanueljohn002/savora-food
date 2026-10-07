@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ok, toEnvelope } from "@/server/errors";
 import { pageMeta, paging, requireAdminUser } from "@/server/admin";
 import { db } from "@/server/db";
+import { viewUrlFor } from "@/server/storage/photos";
 
 /**
  * Admin vendor approval queue (server-guarded: ADMIN role only).
@@ -94,14 +95,21 @@ export async function GET(request: NextRequest) {
       user_email: string;
       verification_method: string | null;
       verification_status: string | null;
+      category: string | null;
+      profile_photo_key: string | null;
       product_count: number;
       order_count: number;
     }[]>`
       SELECT v.id, v.business_name, v.slug, v.owner_name, v.email, v.phone, v.city, v.state,
              v.status, v.status_reason, v.commission_rate, v.rating_average, v.rating_count,
-             v.is_featured, v.created_at,
+             v.is_featured, v.created_at, v.profile_photo_key,
              u.email AS user_email,
              vv.method AS verification_method, vv.status AS verification_status,
+             (
+               SELECT c.name FROM vendor_categories vc
+               JOIN categories c ON c.id = vc.category_id
+               WHERE vc.vendor_id = v.id ORDER BY c.name ASC LIMIT 1
+             ) AS category,
              (SELECT COUNT(*) FROM products p WHERE p.vendor_id = v.id) AS product_count,
              (SELECT COUNT(*) FROM orders o WHERE o.vendor_id = v.id) AS order_count
       FROM vendors v JOIN users u ON u.id = v.user_id
@@ -122,32 +130,54 @@ export async function GET(request: NextRequest) {
       LIMIT ${pageSize} OFFSET ${offset}
     `;
 
+    // Real S3 profile-photo URLs, minted per row. Best-effort: a missing
+    // key or unconfigured bucket yields null, never a failure.
+    let s3: { bucket: string; region: string; accessKeyId: string; secretAccessKey: string } | null = null;
+    try {
+      const { s3ConfigFromEnv } = await import("@/server/storage/s3");
+      s3 = s3ConfigFromEnv();
+    } catch {
+      s3 = null;
+    }
+
     return NextResponse.json(
       ok(
-        rows.map((row) => ({
-          id: row.id,
-          businessName: row.business_name,
-          slug: row.slug,
-          ownerName: row.owner_name,
-          email: row.email ?? row.user_email,
-          userEmail: row.user_email,
-          phone: row.phone,
-          city: row.city,
-          state: row.state,
-          status: row.status,
-          statusReason: row.status_reason,
-          commissionRate: Number(row.commission_rate),
-          ratingAverage: Number(row.rating_average),
-          ratingCount: row.rating_count,
-          isFeatured: row.is_featured,
-          createdAt: row.created_at,
-          productCount: Number(row.product_count),
-          orderCount: Number(row.order_count),
-          verification: {
-            method: row.verification_method ?? "BVN",
-            status: row.verification_status ?? "NOT_SUBMITTED",
-          },
-        })),
+        rows.map((row) => {
+          let photoUrl: string | null = null;
+          if (s3 && row.profile_photo_key) {
+            try {
+              photoUrl = viewUrlFor(s3, row.profile_photo_key).url;
+            } catch {
+              photoUrl = null;
+            }
+          }
+          return {
+            id: row.id,
+            businessName: row.business_name,
+            slug: row.slug,
+            ownerName: row.owner_name,
+            email: row.email ?? row.user_email,
+            userEmail: row.user_email,
+            phone: row.phone,
+            city: row.city,
+            state: row.state,
+            status: row.status,
+            statusReason: row.status_reason,
+            commissionRate: Number(row.commission_rate),
+            ratingAverage: Number(row.rating_average),
+            ratingCount: row.rating_count,
+            isFeatured: row.is_featured,
+            createdAt: row.created_at,
+            productCount: Number(row.product_count),
+            orderCount: Number(row.order_count),
+            category: row.category,
+            photoUrl,
+            verification: {
+              method: row.verification_method ?? "BVN",
+              status: row.verification_status ?? "NOT_SUBMITTED",
+            },
+          };
+        }),
         { ...pageMeta(total, page, pageSize), counts, tab },
       ),
     );

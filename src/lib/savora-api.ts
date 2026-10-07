@@ -891,6 +891,8 @@ export type AdminVendor = {
   createdAt: string;
   productCount: number;
   orderCount: number;
+  category: string | null;
+  photoUrl: string | null;
   verification: { method: string; status: string };
 };
 
