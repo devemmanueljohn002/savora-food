@@ -4,6 +4,7 @@ import PayoutPanel from "@/components/PayoutPanel";
 import { RiderShell, RiderSignIn, naira } from "@/components/RiderShell";
 import {
   useRequestRiderWithdrawal,
+  useRequestRiderWithdrawalOtp,
   useRiderEarnings,
   useRiderProfile,
   useRiderRecipient,
@@ -22,6 +23,7 @@ export default function RiderEarningsPage() {
   const payouts = useRiderWithdrawals();
   const saveRecipient = useSaveRiderRecipient();
   const requestWithdrawal = useRequestRiderWithdrawal();
+  const requestOtp = useRequestRiderWithdrawalOtp();
 
   if (profile.isLoading) {
     return (
@@ -121,6 +123,7 @@ export default function RiderEarningsPage() {
               resolvePayoutBankAccount({ account_number: input.accountNumber, bank_code: input.bankCode })
             }
             onSaveAccount={(input) => saveRecipient.mutateAsync(input)}
+            onRequestOtp={() => requestOtp.mutateAsync()}
             onWithdraw={(input) => requestWithdrawal.mutateAsync(input)}
           />
         </>

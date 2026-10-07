@@ -43,11 +43,13 @@ export async function GET(request: NextRequest) {
           CASE w.owner_type
             WHEN 'VENDOR' THEN COALESCE(v.business_name, 'Vendor')
             WHEN 'RIDER' THEN COALESCE(r.name, 'Rider')
+            WHEN 'AFFILIATE' THEN COALESCE(a.full_name, 'Affiliate')
             ELSE w.owner_type
           END AS owner_name
         FROM (SELECT 1) AS x
         LEFT JOIN vendors v ON w.owner_type = 'VENDOR' AND v.id = w.owner_id
         LEFT JOIN delivery_partners r ON w.owner_type = 'RIDER' AND r.id = w.owner_id
+        LEFT JOIN affiliates a ON w.owner_type = 'AFFILIATE' AND a.id = w.owner_id
       ) AS o
       WHERE (${status === ""} OR w.status = ${status})
         AND (${ownerType === ""} OR w.owner_type = ${ownerType})

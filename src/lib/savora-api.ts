@@ -653,6 +653,15 @@ export type PayoutWithdrawal = {
   id: string;
   amountKobo: number;
   amount: number;
+  feeKobo?: number;
+  fee?: number;
+  netKobo?: number;
+  net?: number;
+  feeBearer?: "USER" | "SAVORA";
+  bankName?: string | null;
+  bankCode?: string | null;
+  accountNumber?: string | null;
+  accountName?: string | null;
   reference: string;
   transferCode: string | null;
   status: string;
@@ -681,6 +690,9 @@ export type PayoutOverview = {
   };
   account: PayoutRecipient;
   withdrawals: PayoutWithdrawal[];
+  fee?: { feeKobo: number; fee: number; bearer: "USER" | "SAVORA" };
+  daily?: { limit: number; usedToday: number; remaining: number };
+  approvalMode?: "AUTO" | "MANUAL";
 };
 
 export type VendorWithdrawals = PayoutOverview;
@@ -689,8 +701,12 @@ export function listVendorWithdrawals() {
   return apiGet<VendorWithdrawals>("/vendor/withdrawals").then((result) => result.data);
 }
 
-export function requestVendorWithdrawal(input: { amountKobo: number; idempotencyKey?: string }) {
+export function requestVendorWithdrawal(input: { amountKobo: number; idempotencyKey?: string; otpCode?: string }) {
   return apiSend<VendorWithdrawal>("/vendor/withdrawals", "POST", input).then((result) => result.data);
+}
+
+export function requestVendorWithdrawalOtp() {
+  return apiSend<{ expiresAt: string }>("/vendor/withdrawals/otp", "POST", {}).then((result) => result.data);
 }
 
 export type VendorAnalytics = {
@@ -1536,8 +1552,175 @@ export function listRiderWithdrawals() {
   return apiGet<PayoutOverview>("/rider/withdrawals").then((result) => result.data);
 }
 
-export function requestRiderWithdrawal(input: { amountKobo: number; idempotencyKey?: string }) {
+export function requestRiderWithdrawal(input: { amountKobo: number; idempotencyKey?: string; otpCode?: string }) {
   return apiSend<PayoutWithdrawal>("/rider/withdrawals", "POST", input).then((result) => result.data);
+}
+
+export function requestRiderWithdrawalOtp() {
+  return apiSend<{ expiresAt: string }>("/rider/withdrawals/otp", "POST", {}).then((result) => result.data);
+}
+
+// ── Affiliates ──────────────────────────────────────────────────────────────
+
+export type AffiliateProfile = {
+  id: string;
+  user_id: string;
+  code: string;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  status_reason: string | null;
+  recipient_code: string | null;
+  bank_code: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AffiliateOverview = {
+  affiliate: {
+    id: string;
+    code: string;
+    fullName: string;
+    phone: string | null;
+    status: string;
+    referralLink: string;
+    createdAt: string;
+  };
+  stats: {
+    clicks: number;
+    orders: number;
+    salesKobo: number;
+    sales: number;
+    earningsKobo: number;
+    earnings: number;
+    conversionRate: number;
+  };
+  wallet: { name: string; availableKobo: number; available: number; pendingKobo: number; pending: number };
+  commission: { mode: "PERCENT" | "FLAT"; pct: number; flat: number; flatKobo: number; baseRule: string };
+};
+
+export function getAffiliateProfile() {
+  return apiGet<AffiliateProfile>("/affiliate/register").then((result) => result.data);
+}
+
+export function registerAffiliate(input: {
+  fullName: string;
+  phone: string;
+  accountNumber?: string | null;
+  bankCode?: string | null;
+}) {
+  return apiSend<AffiliateProfile>("/affiliate/register", "POST", input).then((result) => result.data);
+}
+
+export function getAffiliateOverview() {
+  return apiGet<AffiliateOverview>("/affiliate/overview").then((result) => result.data);
+}
+
+export function getAffiliateRecipient() {
+  return apiGet<PayoutRecipient>("/affiliate/recipient").then((result) => result.data);
+}
+
+export function saveAffiliateRecipient(input: { accountNumber: string; bankCode: string }) {
+  return apiSend<{ recipientCode: string; accountName?: string; accountNumber?: string; reused?: boolean }>(
+    "/affiliate/recipient",
+    "POST",
+    input,
+  ).then((result) => result.data);
+}
+
+export function listAffiliateWithdrawals() {
+  return apiGet<PayoutOverview>("/affiliate/withdrawals").then((result) => result.data);
+}
+
+export function requestAffiliateWithdrawal(input: { amountKobo: number; idempotencyKey?: string; otpCode?: string }) {
+  return apiSend<PayoutWithdrawal>("/affiliate/withdrawals", "POST", input).then((result) => result.data);
+}
+
+export function requestAffiliateWithdrawalOtp() {
+  return apiSend<{ expiresAt: string }>("/affiliate/withdrawals/otp", "POST", {}).then((result) => result.data);
+}
+
+export type AdminAffiliate = {
+  id: string;
+  code: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  statusReason: string | null;
+  referrals: number;
+  salesKobo: number;
+  sales: number;
+  paidKobo: number;
+  paid: number;
+  createdAt: string;
+};
+
+export function listAdminAffiliates() {
+  return apiGet<AdminAffiliate[]>("/admin/affiliates").then((result) => result.data);
+}
+
+export function updateAdminAffiliate(id: string, input: { action: "suspend" | "ban" | "reactivate"; reason?: string | null }) {
+  return apiSend<{ status: string }>(`/admin/affiliates/${encodeURIComponent(id)}`, "PATCH", input).then(
+    (result) => result.data,
+  );
+}
+
+export type AffiliateLeaderboardEntry = {
+  affiliateId: string;
+  code: string;
+  fullName: string;
+  orders: number;
+  salesKobo: number;
+  sales: number;
+  earningsKobo: number;
+  earnings: number;
+};
+
+export function getAffiliateLeaderboard() {
+  return apiGet<AffiliateLeaderboardEntry[]>("/admin/affiliates?view=leaderboard").then((result) => result.data);
+}
+
+// ── Admin withdrawals (finance review) + payout settings ───────────────────
+
+export type AdminWithdrawal = {
+  id: string;
+  ownerType: string;
+  ownerId: string;
+  ownerName: string;
+  amountKobo: number;
+  amount: number;
+  reference: string;
+  transferCode: string | null;
+  status: string;
+  failureReason: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  createdAt: string;
+};
+
+export function listAdminWithdrawals(params: { status?: string; owner_type?: string } = {}) {
+  return apiGet<AdminWithdrawal[]>(
+    `/admin/withdrawals${queryString({ status: params.status, owner_type: params.owner_type })}`,
+  ).then((result) => result.data);
+}
+
+export function reviewAdminWithdrawal(id: string, input: { action: "approve" | "reject"; note?: string | null }) {
+  return apiSend<{ status: string }>(`/admin/withdrawals/${encodeURIComponent(id)}`, "PATCH", input).then(
+    (result) => result.data,
+  );
+}
+
+export function getAdminPayoutSettings() {
+  return apiGet<Record<string, unknown>>("/admin/payout-settings").then((result) => result.data);
+}
+
+export function updateAdminPayoutSettings(input: Record<string, unknown>) {
+  return apiSend<Record<string, unknown>>("/admin/payout-settings", "PATCH", input).then((result) => result.data);
 }
 
 // ── Favorites (customers) ─────────────────────────────────────────────────
@@ -1841,7 +2024,7 @@ export function trackOrderByNumber(number: string) {
   return apiGet<OrderTracking>(`/orders/track${queryString({ number })}`).then((result) => result.data);
 }
 
-export function createCheckoutOrders(input: { addressId: string; deliveryInstructions?: string; couponCode?: string }) {
+export function createCheckoutOrders(input: { addressId: string; deliveryInstructions?: string; couponCode?: string; referralCode?: string }) {
   return apiSend<CheckoutResult>("/orders/checkout", "POST", input).then((result) => result.data);
 }
 

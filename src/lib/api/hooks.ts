@@ -28,6 +28,11 @@ import {
   deleteProductVariant,
   deleteVendorProduct,
   getAccount,
+  getAdminPayoutSettings,
+  getAffiliateLeaderboard,
+  getAffiliateOverview,
+  getAffiliateProfile,
+  getAffiliateRecipient,
   getConsumerOverview,
   getAddresses,
   getAdminCustomer,
@@ -80,6 +85,9 @@ import {
   listAdminRiders,
   listAdminVendors,
   listAdminVendorQueue,
+  listAdminWithdrawals,
+  listAdminAffiliates,
+  listAffiliateWithdrawals,
   listAuditLog,
   listPlatformSettings,
   listProductVariants,
@@ -94,21 +102,30 @@ import {
   markNotificationsRead,
   quoteCheckout,
   quoteVendorCatering,
+  registerAffiliate,
   rejectVendorOrder,
   releaseRiderJob,
   removeCartItem,
   removeFavorite,
+  requestAffiliateWithdrawal,
+  requestAffiliateWithdrawalOtp,
   requestVendorWithdrawal,
+  requestVendorWithdrawalOtp,
+  requestRiderWithdrawalOtp,
+  reviewAdminWithdrawal,
   riderDeliveryAction,
+  saveAffiliateRecipient,
   saveVendorRecipient,
   getVendorRecipient,
   toggleFavorite,
   updateAccount,
   updateAddress,
+  updateAdminAffiliate,
   updateAdminCategory,
   updateAdminCoupon,
   updateAdminCustomer,
   updateAdminPayout,
+  updateAdminPayoutSettings,
   updateAdminProduct,
   updateAdminRider,
   updateAdminVendor,
@@ -893,11 +910,18 @@ export function useRiderWithdrawals() {
 export function useRequestRiderWithdrawal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { amountKobo: number; idempotencyKey: string }) => requestRiderWithdrawal(input),
+    mutationFn: (input: { amountKobo: number; idempotencyKey: string; otpCode?: string }) =>
+      requestRiderWithdrawal(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: riderPayoutKeys.withdrawals });
       void queryClient.invalidateQueries({ queryKey: ["rider-earnings"] });
     },
+  });
+}
+
+export function useRequestRiderWithdrawalOtp() {
+  return useMutation({
+    mutationFn: () => requestRiderWithdrawalOtp(),
   });
 }
 
@@ -943,11 +967,18 @@ export function useVendorWithdrawals() {
 export function useRequestVendorWithdrawal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { amountKobo: number; idempotencyKey: string }) => requestVendorWithdrawal(input),
+    mutationFn: (input: { amountKobo: number; idempotencyKey: string; otpCode?: string }) =>
+      requestVendorWithdrawal(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: withdrawalKeys.withdrawals });
       void queryClient.invalidateQueries({ queryKey: vendorKeys.earnings });
     },
+  });
+}
+
+export function useRequestVendorWithdrawalOtp() {
+  return useMutation({
+    mutationFn: () => requestVendorWithdrawalOtp(),
   });
 }
 
@@ -1344,6 +1375,45 @@ export function useUpdateAdminPayout(id: string) {
   });
 }
 
+export function useAdminWithdrawals(params: { status?: string; owner_type?: string } = {}) {
+  return useQuery({
+    queryKey: [...adminKeys.payouts, "withdrawals", params] as const,
+    queryFn: () => listAdminWithdrawals(params),
+    retry: false,
+    staleTime: 15_000,
+  });
+}
+
+export function useReviewAdminWithdrawal(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { action: "approve" | "reject"; note?: string | null }) =>
+      reviewAdminWithdrawal(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.payouts });
+    },
+  });
+}
+
+export function useAdminPayoutSettings() {
+  return useQuery({
+    queryKey: [...adminKeys.payouts, "settings"] as const,
+    queryFn: getAdminPayoutSettings,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateAdminPayoutSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => updateAdminPayoutSettings(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.payouts });
+    },
+  });
+}
+
 export function useAdminCoupons() {
   return useQuery({
     queryKey: adminKeys.coupons,
@@ -1485,6 +1555,123 @@ export function useSuperAnalytics() {
   return useQuery({
     queryKey: superAdminKeys.analytics,
     queryFn: getSuperAnalytics,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+// ── Affiliates ──────────────────────────────────────────────────────────────
+
+export const affiliateKeys = {
+  profile: ["affiliate-profile"] as const,
+  overview: ["affiliate-overview"] as const,
+  withdrawals: ["affiliate-withdrawals"] as const,
+  recipient: ["affiliate-recipient"] as const,
+};
+
+export function useAffiliateProfile() {
+  return useQuery({
+    queryKey: affiliateKeys.profile,
+    queryFn: getAffiliateProfile,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useRegisterAffiliate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { fullName: string; phone: string; accountNumber?: string | null; bankCode?: string | null }) =>
+      registerAffiliate(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: affiliateKeys.profile });
+    },
+  });
+}
+
+export function useAffiliateOverview() {
+  return useQuery({
+    queryKey: affiliateKeys.overview,
+    queryFn: getAffiliateOverview,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export function useAffiliateRecipient() {
+  return useQuery({
+    queryKey: affiliateKeys.recipient,
+    queryFn: getAffiliateRecipient,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveAffiliateRecipient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { accountNumber: string; bankCode: string }) => saveAffiliateRecipient(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: affiliateKeys.recipient });
+      void queryClient.invalidateQueries({ queryKey: affiliateKeys.withdrawals });
+    },
+  });
+}
+
+export function useAffiliateWithdrawals() {
+  return useQuery({
+    queryKey: affiliateKeys.withdrawals,
+    queryFn: listAffiliateWithdrawals,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export function useRequestAffiliateWithdrawal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { amountKobo: number; idempotencyKey: string; otpCode?: string }) =>
+      requestAffiliateWithdrawal(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: affiliateKeys.withdrawals });
+      void queryClient.invalidateQueries({ queryKey: affiliateKeys.overview });
+    },
+  });
+}
+
+export function useRequestAffiliateWithdrawalOtp() {
+  return useMutation({
+    mutationFn: () => requestAffiliateWithdrawalOtp(),
+  });
+}
+
+// ── Admin affiliates ────────────────────────────────────────────────────────
+
+export function useAdminAffiliates() {
+  return useQuery({
+    queryKey: [...adminKeys.payouts, "affiliates"] as const,
+    queryFn: listAdminAffiliates,
+    retry: false,
+    staleTime: 15_000,
+  });
+}
+
+export function useUpdateAdminAffiliate(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { action: "suspend" | "ban" | "reactivate"; reason?: string | null }) =>
+      updateAdminAffiliate(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.payouts });
+    },
+  });
+}
+
+export function useAffiliateLeaderboard() {
+  return useQuery({
+    queryKey: [...adminKeys.payouts, "leaderboard"] as const,
+    queryFn: getAffiliateLeaderboard,
     retry: false,
     staleTime: 60_000,
   });

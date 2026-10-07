@@ -7,9 +7,15 @@ import {
   resolveAccount,
 } from "./payments/transfers";
 import {
+  computeNetKobo,
+  countTodayWithdrawals,
   failWithdrawalAndReverse,
+  getApprovalMode,
   getCoolingHours,
+  getDailyLimit,
+  getFeeBearer,
   getOwnerPolicy,
+  getTransferFeeKobo,
   getWalletBalance,
   isCoolingActive,
   koboToNaira,
@@ -17,10 +23,12 @@ import {
   markWithdrawalSubmitted,
   releaseDueHolds,
   requestWithdrawal,
+  transferReasonFor,
   type Owner,
   type OwnerPolicy,
   type WithdrawalRow,
 } from "./wallet";
+import { verifyWithdrawalOtp } from "./withdrawal-otp";
 
 /**
  * Owner-agnostic payout service: one implementation for vendors AND riders.
@@ -33,7 +41,7 @@ import {
  */
 
 /** Whitelisted literal table names — never user input. */
-const OWNER_TABLES = { VENDOR: "vendors", RIDER: "delivery_partners" } as const;
+const OWNER_TABLES = { VENDOR: "vendors", RIDER: "delivery_partners", AFFILIATE: "affiliates" } as const;
 
 type PayoutAccountRow = {
   recipient_code: string | null;
@@ -221,12 +229,20 @@ export async function getPayoutOverview(owner: Owner, limit = 20): Promise<{
   limits: PayoutLimits;
   account: PayoutAccount;
   withdrawals: Array<ReturnType<typeof toWithdrawalResponse>>;
+  fee: { feeKobo: number; fee: number; bearer: "USER" | "SAVORA" };
+  daily: { limit: number; usedToday: number; remaining: number };
+  approvalMode: "AUTO" | "MANUAL";
 }> {
-  const [balance, policy, account, rows] = await Promise.all([
+  const [balance, policy, account, rows, feeKobo, bearer, dailyLimit, usedToday, approvalMode] = await Promise.all([
     getWalletBalance(owner),
     getOwnerPolicy(owner.type),
     getPayoutAccount(owner),
     listWithdrawals(owner, limit),
+    getTransferFeeKobo(),
+    getFeeBearer(),
+    getDailyLimit(owner.type),
+    countTodayWithdrawals(owner).catch(() => 0),
+    getApprovalMode(),
   ]);
   return {
     ownerType: owner.type,
@@ -237,14 +253,29 @@ export async function getPayoutOverview(owner: Owner, limit = 20): Promise<{
     limits: describeLimits(policy),
     account,
     withdrawals: rows.map(toWithdrawalResponse),
+    fee: { feeKobo, fee: koboToNaira(feeKobo), bearer },
+    daily: { limit: dailyLimit, usedToday, remaining: Math.max(0, dailyLimit - usedToday) },
+    approvalMode,
   };
 }
 
 export function toWithdrawalResponse(row: WithdrawalRow) {
+  const amountKobo = Number(row.amount_kobo);
+  const feeKobo = Number(row.fee_kobo ?? 0);
+  const netKobo = row.net_kobo != null ? Number(row.net_kobo) : amountKobo - feeKobo;
   return {
     id: row.id,
-    amountKobo: Number(row.amount_kobo),
-    amount: koboToNaira(Number(row.amount_kobo)),
+    amountKobo,
+    amount: koboToNaira(amountKobo),
+    feeKobo,
+    fee: koboToNaira(feeKobo),
+    netKobo,
+    net: koboToNaira(netKobo),
+    feeBearer: (row.fee_bearer as "USER" | "SAVORA" | undefined) ?? "USER",
+    bankName: null,
+    bankCode: row.bank_code ?? null,
+    accountNumber: row.account_number ?? null,
+    accountName: row.account_name ?? null,
     reference: row.reference,
     transferCode: row.paystack_transfer_code,
     status: row.status,
@@ -273,14 +304,16 @@ export type WithdrawResult = {
  *
  * Never trusts the client for owner ID (session-derived only) or amount
  * (re-checked against the locked balance + per-owner policy). Sequence:
- * deduct + create PENDING in ONE transaction → commit → call Paystack. Above
- * the auto-approve threshold the row parks for finance approval and no
- * Paystack call happens yet.
+ * verify email OTP → deduct + create PENDING in ONE transaction → commit →
+ * call Paystack (with "Savora Food Vendor/Rider Payout" reason and the net
+ * amount after the configurable fee). MANUAL approval mode or amounts above
+ * the auto-approve threshold park for finance approval with no Paystack call.
  */
 export async function withdraw(input: {
   owner: Owner;
   amountKobo: number;
   idempotencyKey?: string | null;
+  otpCode?: string | null;
 }): Promise<WithdrawResult> {
   const policy = await getOwnerPolicy(input.owner.type);
   if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) {
@@ -291,15 +324,28 @@ export async function withdraw(input: {
       `Maximum withdrawal is ₦${koboToNaira(policy.maxWithdrawalKobo).toLocaleString()}. Contact support for larger payouts.`,
     );
   }
+  if (!input.otpCode?.trim()) {
+    throw ApiError.validation("Enter the 6-digit code sent to your email to confirm this withdrawal.");
+  }
 
   const account = await getPayoutAccount(input.owner);
   if (!account.recipientCode) {
     throw ApiError.validation("Add and verify your bank account before withdrawing.");
   }
 
+  // OTP first: no funds move until the email code is consumed (single-use).
+  await verifyWithdrawalOtp(input.owner, input.otpCode.trim());
+
   // Matured holds unlock here too (not just on balance views), so an owner
   // who goes straight to withdraw is measured against released funds.
   await releaseDueHolds(input.owner).catch(() => undefined);
+
+  const feeKobo = await getTransferFeeKobo();
+  const feeBearer = await getFeeBearer();
+  const netKobo = computeNetKobo(input.amountKobo, feeKobo, feeBearer);
+  if (feeBearer === "USER" && feeKobo > 0 && netKobo <= 0) {
+    throw ApiError.validation("Amount is too small to cover the Paystack transfer fee.");
+  }
 
   const { withdrawal, duplicate } = await requestWithdrawal({
     owner: input.owner,
@@ -309,21 +355,26 @@ export async function withdraw(input: {
     accountNumber: account.accountNumber,
     accountName: account.accountName,
     idempotencyKey: input.idempotencyKey,
+    feeKobo,
+    netKobo,
+    feeBearer,
   });
   if (duplicate) {
     return { withdrawal, duplicate: true, awaitingApproval: false };
   }
 
-  // Large withdrawals park for finance approval — no Paystack call yet.
-  if (input.amountKobo > policy.autoApproveBelowKobo) {
+  // MANUAL mode parks everything; AUTO mode parks only large withdrawals.
+  const approvalMode = await getApprovalMode();
+  if (approvalMode === "MANUAL" || input.amountKobo > policy.autoApproveBelowKobo) {
     return { withdrawal, duplicate: false, awaitingApproval: true };
   }
 
   const submitted = await initiateTransferAndRecord({
     withdrawalId: withdrawal.id,
-    amountKobo: Number(withdrawal.amount_kobo),
+    amountKobo: netKobo,
     recipientCode: withdrawal.recipient_code,
     reference: withdrawal.reference,
+    ownerType: input.owner.type,
   });
   return { withdrawal: submitted, duplicate: false, awaitingApproval: false };
 }
@@ -342,6 +393,7 @@ export async function initiateTransferAndRecord(input: {
   amountKobo: number;
   recipientCode: string;
   reference: string;
+  ownerType?: Owner["type"];
 }): Promise<WithdrawalRow> {
   const sql = db();
   try {
@@ -349,6 +401,7 @@ export async function initiateTransferAndRecord(input: {
       amountKobo: input.amountKobo,
       recipientCode: input.recipientCode,
       reference: input.reference,
+      reason: transferReasonFor(input.ownerType ?? "VENDOR"),
     });
     if (result.requiresOtp) {
       await markWithdrawalSubmitted({
@@ -375,7 +428,14 @@ export async function initiateTransferAndRecord(input: {
       if (error.ambiguous) {
         await markWithdrawalProcessing(input.withdrawalId, error.paystackMessage).catch(() => undefined);
       } else {
-        await failWithdrawalAndReverse(input.withdrawalId, error.paystackMessage).catch(() => undefined);
+        // Friendly copy for the platform-float case; raw gateway text otherwise.
+        const reason = error.insufficientFunds
+          ? "Savora's payout balance is temporarily low. Your funds were returned — please try again shortly."
+          : error.paystackMessage;
+        await failWithdrawalAndReverse(input.withdrawalId, reason).catch(() => undefined);
+        if (error.insufficientFunds) {
+          throw ApiError.paymentError(reason);
+        }
       }
     } else {
       await markWithdrawalProcessing(input.withdrawalId, "Transfer initiation failed.").catch(() => undefined);

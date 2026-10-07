@@ -17,14 +17,21 @@ import {
 } from "@/server/payments/transfers";
 import {
   WITHDRAWAL_LIMITS,
+  computeNetKobo,
   generateIdempotencyKey,
   generateWithdrawalReference,
+  isDailyLimitReached,
   isTerminalWithdrawalStatus,
   isUniqueViolation,
   koboToNaira,
   nairaToKobo,
   nextWithdrawalStatus,
+  resolveApprovalMode,
+  resolveDailyLimit,
+  resolveFeeBearer,
+  resolveTransferFeeKobo,
   shouldReverseForEvent,
+  transferReasonFor,
   validateWithdrawalAmount,
 } from "@/server/wallet";
 import { ApiError } from "@/server/errors";
@@ -51,9 +58,9 @@ describe("money is integers (kobo, never floats)", () => {
 
 describe("insufficient balance", () => {
   it("rejects withdrawals above the available balance (vendor-side)", () => {
-    expect(() => validateWithdrawalAmount(200_000, 100_000)).toThrowError(ApiError);
+    expect(() => validateWithdrawalAmount(2_000_000, 1_000_000)).toThrowError(ApiError);
     try {
-      validateWithdrawalAmount(200_000, 100_000);
+      validateWithdrawalAmount(2_000_000, 1_000_000);
       expect.unreachable();
     } catch (error) {
       expect((error as ApiError).code).toBe("CONFLICT");
@@ -210,5 +217,33 @@ describe("OTP handling", () => {
     );
     expect(result.requiresOtp).toBe(true);
     expect(nextWithdrawalStatus("PENDING", "transfer.otp")).toBe("OTP");
+  });
+});
+
+describe("phase 1 policy (configurable minimums, fees, daily limits, approval)", () => {
+  it("defaults to vendor ₦10,000 and rider ₦5,000 minimums", () => {
+    expect(WITHDRAWAL_LIMITS.minWithdrawalKobo).toBe(1_000_000);
+    expect(resolveDailyLimit("VENDOR", {})).toBe(2);
+    expect(resolveDailyLimit("RIDER", {})).toBe(3);
+  });
+
+  it("computes the recipient net from the fee bearer", () => {
+    expect(computeNetKobo(1_000_000, 10_000, "USER")).toBe(990_000);
+    expect(computeNetKobo(1_000_000, 10_000, "SAVORA")).toBe(1_000_000);
+    expect(resolveTransferFeeKobo({})).toBe(10_000);
+    expect(resolveFeeBearer({})).toBe("USER");
+    expect(resolveFeeBearer({ transfer_fee_bearer: "SAVORA" })).toBe("SAVORA");
+  });
+
+  it("gates on the daily count and parks everything in MANUAL mode", () => {
+    expect(isDailyLimitReached(2, 2)).toBe(true);
+    expect(isDailyLimitReached(1, 2)).toBe(false);
+    expect(resolveApprovalMode({})).toBe("AUTO");
+    expect(resolveApprovalMode({ payout_approval_mode: "MANUAL" })).toBe("MANUAL");
+  });
+
+  it("labels Paystack transfers per owner rail", () => {
+    expect(transferReasonFor("VENDOR")).toBe("Savora Food Vendor Payout");
+    expect(transferReasonFor("RIDER")).toBe("Savora Food Rider Payout");
   });
 });

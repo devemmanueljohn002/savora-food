@@ -48,6 +48,14 @@ export async function refundOrderPayment(orderId: string, reason: string): Promi
         UPDATE refunds SET status = 'PROCESSED'
         WHERE order_id = ${orderId} AND reference = ${reference}
       `;
+      // The order no longer qualifies: reverse any affiliate commission
+      // (best-effort; refund stays processed regardless).
+      try {
+        const { reverseAffiliateCommission } = await import("./affiliates");
+        await reverseAffiliateCommission(orderId, `refunded: ${reason}`);
+      } catch {
+        // auditable via the surviving commission row; support can reverse manually
+      }
       await recordTransactions({
         orderId,
         paymentId: payment.id,

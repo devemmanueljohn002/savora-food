@@ -13,6 +13,8 @@ const bodySchema = z.object({
   // Client-generated id per submit; dedupes double-clicks. The server falls
   // back to generating one when absent.
   idempotencyKey: z.string().trim().max(100).optional().nullable(),
+  // 6-digit email OTP from POST /vendor/withdrawals/otp (single-use).
+  otpCode: z.string().trim().max(10).optional().nullable(),
 });
 
 /** Withdrawal history + wallet for the authenticated vendor. The owner id comes
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
       owner,
       amountKobo: parsed.data.amountKobo,
       idempotencyKey: parsed.data.idempotencyKey,
+      otpCode: parsed.data.otpCode,
     });
     if (result.duplicate) {
       return NextResponse.json(ok({ ...toWithdrawalResponse(result.withdrawal), duplicate: true }));

@@ -18,7 +18,7 @@ import { roundMoney } from "./orders";
  * truth for final withdrawal status for BOTH owner types.
  */
 
-export type OwnerType = "VENDOR" | "RIDER";
+export type OwnerType = "VENDOR" | "RIDER" | "AFFILIATE";
 export type Owner = { type: OwnerType; id: string };
 
 export type EntryType =
@@ -47,8 +47,8 @@ export type OwnerPolicy = {
 export const WITHDRAWAL_LIMITS = {
   /** Earnings unlock this many days after delivery (hold absorbs refunds/chargebacks). */
   holdDays: 2,
-  /** Minimum single withdrawal: ₦1,000 in kobo. Rejects dust/test spam. */
-  minWithdrawalKobo: 100_000,
+  /** Minimum single withdrawal: ₦10,000 in kobo. Rejects dust/test spam. */
+  minWithdrawalKobo: 1_000_000,
   /** Maximum single withdrawal: ₦500,000 in kobo. Caps blast radius of a compromised session. */
   maxWithdrawalKobo: 50_000_000,
   /** At or below ₦50,000: execute immediately. Above: park as PENDING for admin approval. */
@@ -57,10 +57,39 @@ export const WITHDRAWAL_LIMITS = {
 
 export const RIDER_POLICY_FALLBACK: OwnerPolicy = {
   holdDays: 1,
-  minWithdrawalKobo: 100_000,
+  minWithdrawalKobo: 500_000,
   maxWithdrawalKobo: 50_000_000,
   autoApproveBelowKobo: 5_000_000,
 };
+
+/** Affiliate fallback: ₦3,000 minimum, no hold (commission is already gated on delivery). */
+export const AFFILIATE_POLICY_FALLBACK: OwnerPolicy = {
+  holdDays: 0,
+  minWithdrawalKobo: 300_000,
+  maxWithdrawalKobo: 50_000_000,
+  autoApproveBelowKobo: 5_000_000,
+};
+
+/** Daily withdrawal counts (CONFIGURABLE per role via payout_config). */
+export const VENDOR_DAILY_LIMIT_FALLBACK = 2;
+export const RIDER_DAILY_LIMIT_FALLBACK = 3;
+export const AFFILIATE_DAILY_LIMIT_FALLBACK = 2;
+
+/** Paystack transfer fee snapshot (CONFIGURABLE). Default ₦100 = 10,000 kobo. */
+export const TRANSFER_FEE_KOBO_FALLBACK = 10_000;
+
+export type TransferFeeBearer = "USER" | "SAVORA";
+export const TRANSFER_FEE_BEARER_FALLBACK: TransferFeeBearer = "USER";
+
+export type PayoutApprovalMode = "AUTO" | "MANUAL";
+export const PAYOUT_APPROVAL_MODE_FALLBACK: PayoutApprovalMode = "AUTO";
+
+/** Per-owner transfer reason sent to Paystack (clear payout label). */
+export function transferReasonFor(ownerType: OwnerType): string {
+  if (ownerType === "RIDER") return "Savora Food Rider Payout";
+  if (ownerType === "AFFILIATE") return "Savora Food Affiliate Payout";
+  return "Savora Food Vendor Payout";
+}
 
 /** Hours after a payout-account change during which withdrawals are blocked. */
 export const BANK_CHANGE_COOLING_HOURS_FALLBACK = 24;
@@ -248,6 +277,20 @@ export function resolveOwnerPolicy(
       ),
     };
   }
+  if (ownerType === "AFFILIATE") {
+    return {
+      holdDays: numSetting(settings, "affiliate_hold_days", AFFILIATE_POLICY_FALLBACK.holdDays),
+      minWithdrawalKobo: Math.round(
+        numSetting(settings, "affiliate_min_withdrawal_kobo", AFFILIATE_POLICY_FALLBACK.minWithdrawalKobo),
+      ),
+      maxWithdrawalKobo: Math.round(
+        numSetting(settings, "affiliate_max_withdrawal_kobo", AFFILIATE_POLICY_FALLBACK.maxWithdrawalKobo),
+      ),
+      autoApproveBelowKobo: Math.round(
+        numSetting(settings, "affiliate_auto_approve_below_kobo", AFFILIATE_POLICY_FALLBACK.autoApproveBelowKobo),
+      ),
+    };
+  }
   return {
     holdDays: numSetting(settings, "hold_days", WITHDRAWAL_LIMITS.holdDays),
     minWithdrawalKobo: Math.round(numSetting(settings, "min_withdrawal_kobo", WITHDRAWAL_LIMITS.minWithdrawalKobo)),
@@ -289,6 +332,62 @@ export async function getRiderSharePct(): Promise<number> {
   return resolveRiderSharePct(await payoutSettings());
 }
 
+/** Daily withdrawal limit for an owner type (CONFIGURABLE per role). */
+export function resolveDailyLimit(ownerType: OwnerType, settings: Record<string, unknown>): number {
+  if (ownerType === "RIDER") {
+    return Math.max(1, Math.round(numSetting(settings, "rider_daily_withdrawal_limit", RIDER_DAILY_LIMIT_FALLBACK)));
+  }
+  if (ownerType === "AFFILIATE") {
+    return Math.max(1, Math.round(numSetting(settings, "affiliate_daily_withdrawal_limit", AFFILIATE_DAILY_LIMIT_FALLBACK)));
+  }
+  return Math.max(1, Math.round(numSetting(settings, "vendor_daily_withdrawal_limit", VENDOR_DAILY_LIMIT_FALLBACK)));
+}
+
+export async function getDailyLimit(ownerType: OwnerType): Promise<number> {
+  return resolveDailyLimit(ownerType, await payoutSettings());
+}
+
+/** Flat Paystack transfer fee in kobo (CONFIGURABLE). */
+export function resolveTransferFeeKobo(settings: Record<string, unknown>): number {
+  return Math.max(0, Math.round(numSetting(settings, "transfer_fee_kobo", TRANSFER_FEE_KOBO_FALLBACK)));
+}
+
+export async function getTransferFeeKobo(): Promise<number> {
+  return resolveTransferFeeKobo(await payoutSettings());
+}
+
+/** Who absorbs the transfer fee (CONFIGURABLE): USER = deducted from payout, SAVORA = platform absorbs. */
+export function resolveFeeBearer(settings: Record<string, unknown>): TransferFeeBearer {
+  return settings["transfer_fee_bearer"] === "SAVORA" ? "SAVORA" : "USER";
+}
+
+export async function getFeeBearer(): Promise<TransferFeeBearer> {
+  return resolveFeeBearer(await payoutSettings());
+}
+
+/** Auto-approve vs manual-approve toggle (CONFIGURABLE). MANUAL parks every request for admin review. */
+export function resolveApprovalMode(settings: Record<string, unknown>): PayoutApprovalMode {
+  return settings["payout_approval_mode"] === "MANUAL" ? "MANUAL" : "AUTO";
+}
+
+export async function getApprovalMode(): Promise<PayoutApprovalMode> {
+  return resolveApprovalMode(await payoutSettings());
+}
+
+/**
+ * Pure fee math: what the recipient actually receives.
+ * USER bearer → amount minus fee (floored at 0); SAVORA bearer → full amount.
+ */
+export function computeNetKobo(amountKobo: number, feeKobo: number, bearer: TransferFeeBearer): number {
+  if (bearer === "SAVORA") return amountKobo;
+  return Math.max(0, amountKobo - feeKobo);
+}
+
+/** Pure daily-limit gate (unit-testable). */
+export function isDailyLimitReached(todayCount: number, limit: number): boolean {
+  return todayCount >= limit;
+}
+
 // ── DB-backed wallet operations ─────────────────────────────────────────────
 
 export type Wallet = {
@@ -316,6 +415,9 @@ export type WithdrawalRow = {
   paid_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  fee_kobo?: string | number | null;
+  net_kobo?: string | number | null;
+  fee_bearer?: string | null;
 };
 
 import type { TransactionSql } from "postgres";
@@ -559,14 +661,84 @@ export async function applyAdjustment(input: {
 }
 
 /**
+ * Affiliate holds mature when the order is DELIVERED (the commission only
+ * exists for delivered, non-cancelled orders) plus an optional
+ * affiliate_hold_days grace period (default 0 = releasable on the first
+ * balance read after delivery). One release per order (idempotent).
+ */
+export async function releaseAffiliateHolds(owner: Owner, holdDays: number): Promise<number> {
+  const sql = db();
+  const days = Math.max(0, Math.round(holdDays));
+  const matured = await sql<{ entry_id: string; amount_kobo: string; order_id: string }[]>`
+    SELECT h.id AS entry_id, h.amount_kobo::text AS amount_kobo, h.order_id::text AS order_id
+    FROM wallet_entries h
+    JOIN orders o ON o.id = h.order_id
+    LEFT JOIN deliveries d ON d.order_id = h.order_id
+    WHERE h.owner_type = 'AFFILIATE' AND h.owner_id = ${owner.id}
+      AND h.kind = 'hold'
+      AND o.status = 'DELIVERED'
+      AND (
+        ${days} = 0
+        OR COALESCE(d.delivered_at, o.updated_at) < NOW() - make_interval(days => ${days})
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM wallet_entries r
+        WHERE r.owner_type = 'AFFILIATE' AND r.owner_id = ${owner.id}
+          AND r.kind = 'release' AND r.order_id = h.order_id
+      )
+  `;
+  if (matured.length === 0) return 0;
+  let released = 0;
+  await sql.begin(async (tx) => {
+    const balances = await lockWalletTx(tx, owner);
+    let available = balances.available;
+    let pending = balances.pending;
+    for (const row of matured) {
+      const amountKobo = toInt(row.amount_kobo);
+      if (amountKobo <= 0) continue;
+      pending = Math.max(0, pending - amountKobo);
+      available += amountKobo;
+      released += amountKobo;
+      await tx`
+        INSERT INTO wallet_entries
+          (owner_type, owner_id, kind, amount_kobo, balance_after_kobo, order_id, meta)
+        VALUES (
+          ${owner.type}, ${owner.id}, 'release', ${amountKobo}, ${available}, ${row.order_id},
+          ${tx.json({ releasedAfterDays: days })}
+        )
+        ON CONFLICT DO NOTHING
+      `;
+      await tx`
+        UPDATE affiliate_commissions
+        SET status = 'RELEASED', released_at = COALESCE(released_at, NOW())
+        WHERE order_id = ${row.order_id} AND affiliate_id = ${owner.id} AND status = 'PENDING'
+      `;
+    }
+    await tx`
+      UPDATE wallets
+      SET available_kobo = ${available}, pending_kobo = ${pending}, updated_at = NOW()
+      WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}
+    `;
+  });
+  return released;
+}
+
+/**
  * Move matured holds into available balance. Vendors mature on
  * order_settlements age; riders mature on delivery_fee entry age (same
- * hold semantics, no settlement dependency). Safe to call on read paths.
+ * hold semantics, no settlement dependency); affiliates mature when the
+ * order is DELIVERED (commission is only ever credited for delivered
+ * orders, plus an optional affiliate_hold_days grace period). Safe to call
+ * on read paths.
  */
 export async function releaseDueHolds(owner: Owner, holdDays?: number): Promise<number> {
   const sql = db();
   const policy = await getOwnerPolicy(owner.type);
   const days = holdDays ?? policy.holdDays;
+
+  if (owner.type === "AFFILIATE") {
+    return releaseAffiliateHolds(owner, Math.max(0, days));
+  }
   if (days <= 0) return 0;
 
   if (owner.type === "VENDOR") {
@@ -701,7 +873,20 @@ export type RequestWithdrawalInput = {
   accountNumber?: string | null;
   accountName?: string | null;
   idempotencyKey?: string | null;
+  feeKobo?: number | null;
+  netKobo?: number | null;
+  feeBearer?: TransferFeeBearer | null;
 };
+
+/** How many withdrawals this owner created since midnight (server time). */
+export async function countTodayWithdrawals(owner: Owner): Promise<number> {
+  const rows = await db()<{ count: string }[]>`
+    SELECT COUNT(*)::text AS count FROM withdrawals
+    WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}
+      AND created_at >= date_trunc('day', NOW())
+  `;
+  return Number(rows[0]?.count ?? 0);
+}
 
 /**
  * Deduct-then-call, for EITHER owner type: in ONE transaction, lock the
@@ -743,6 +928,25 @@ export async function requestWithdrawal(input: RequestWithdrawalInput): Promise<
     );
   }
 
+  // Daily limits (CONFIGURABLE per role): enforced server-side on every request.
+  const dailyLimit = await getDailyLimit(input.owner.type);
+  const todayCount = await countTodayWithdrawals(input.owner);
+  if (isDailyLimitReached(todayCount, dailyLimit)) {
+    throw ApiError.conflict(
+      `Daily withdrawal limit reached (${dailyLimit} per day). Try again tomorrow.`,
+    );
+  }
+
+  // Transfer-fee snapshot: stored per request so later config changes cannot
+  // rewrite history. USER bearer → recipient gets amount − fee.
+  const settings = await payoutSettings();
+  const feeKobo = input.feeKobo ?? resolveTransferFeeKobo(settings);
+  const feeBearer = input.feeBearer ?? resolveFeeBearer(settings);
+  const netKobo = input.netKobo ?? computeNetKobo(input.amountKobo, feeKobo, feeBearer);
+  if (feeBearer === "USER" && feeKobo > 0 && netKobo <= 0) {
+    throw ApiError.validation("Amount is too small to cover the Paystack transfer fee.");
+  }
+
   const reference = generateWithdrawalReference();
   try {
     const withdrawal = await sql.begin(async (tx) => {
@@ -767,11 +971,11 @@ export async function requestWithdrawal(input: RequestWithdrawalInput): Promise<
       const rows = await tx<WithdrawalRow[]>`
         INSERT INTO withdrawals
           (owner_type, owner_id, amount_kobo, recipient_code, bank_code, account_number,
-           account_name, reference, status, idempotency_key)
+           account_name, reference, status, idempotency_key, fee_kobo, net_kobo, fee_bearer)
         VALUES (
           ${input.owner.type}, ${input.owner.id}, ${input.amountKobo}, ${input.recipientCode.trim()},
           ${input.bankCode ?? null}, ${input.accountNumber ?? null}, ${input.accountName ?? null},
-          ${reference}, 'PENDING', ${idempotencyKey}
+          ${reference}, 'PENDING', ${idempotencyKey}, ${feeKobo}, ${netKobo}, ${feeBearer}
         )
         RETURNING *
       `;

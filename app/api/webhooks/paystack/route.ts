@@ -53,6 +53,55 @@ function extractTransferFields(payload: Record<string, unknown>): {
   };
 }
 
+export function extractDisputeReference(payload: Record<string, unknown>): string | null {
+  const data = asRecord(payload.data) ?? {};
+  const transaction = asRecord(data.transaction);
+  return (
+    firstString(data.transaction_reference) ??
+    firstString(data.reference) ??
+    firstString(transaction?.reference) ??
+    extractReference(payload)
+  );
+}
+
+async function handleDisputeEvent(
+  payload: Record<string, unknown>,
+  event: string,
+): Promise<NextResponse> {
+  // A dispute/chargeback disqualifies the order: reverse any affiliate
+  // commission (idempotent — already-reversed is a no-op). The order/payment
+  // itself is left for support to review; this only claws back the referral.
+  const reference = extractDisputeReference(payload);
+  if (!reference) {
+    return NextResponse.json({ success: true, message: "Dispute event without reference." });
+  }
+
+  const sql = db();
+  const eventKey = eventKeyFor(payload, event, reference);
+  const inserted = await sql<{ id: string }[]>`
+    INSERT INTO paystack_webhook_events (event_key, event, reference, payload)
+    VALUES (${eventKey}, ${event}, ${reference}, ${sql.json(JSON.parse(JSON.stringify(payload)))})
+    ON CONFLICT (event_key) DO NOTHING
+    RETURNING id
+  `;
+  if (inserted.length === 0) {
+    return NextResponse.json({ success: true, message: "Duplicate event ignored." });
+  }
+
+  const payment = await findPaymentByReference(reference);
+  if (!payment) {
+    return NextResponse.json({ success: true, message: "Unmatched payment reference." });
+  }
+  try {
+    const { reverseAffiliateCommission } = await import("@/server/affiliates");
+    const reversed = await reverseAffiliateCommission(payment.order_id, `chargeback/dispute (${event})`);
+    return NextResponse.json({ success: true, message: reversed ? "Commission reversed." : "No commission to reverse." });
+  } catch (error) {
+    console.error("[webhook] dispute reversal failed:", { reference, error });
+    return NextResponse.json({ success: true, message: "Reversal failed; support can reverse manually." });
+  }
+}
+
 async function handleTransferEvent(
   payload: Record<string, unknown>,
   event: string,
@@ -108,6 +157,12 @@ export async function POST(request: NextRequest) {
   // truth for final status — failed/reversed events restore the owner's balance.
     if (event.startsWith("transfer.")) {
       return handleTransferEvent(payload, event);
+    }
+
+    // Disputes/chargebacks disqualify the order's affiliate commission
+    // (reversed idempotently; order/payment review stays with support).
+    if (event.startsWith("charge.dispute")) {
+      return handleDisputeEvent(payload, event);
     }
 
     // Only charge success moves an order; anything else is acknowledged but
@@ -177,6 +232,14 @@ export async function POST(request: NextRequest) {
 
     try {
       await markOrderPaymentPaid(payment.order_id, owner[0].user_id, reference);
+      // Affiliate commission becomes PENDING (ledger hold) now that the
+      // order is paid. Best-effort: payment stays confirmed regardless.
+      try {
+        const { confirmAffiliateCommission } = await import("@/server/affiliates");
+        await confirmAffiliateCommission(payment.order_id);
+      } catch {
+        // auditable via the missing commission row; reconcile can backfill
+      }
     } catch (error) {
       // Paystack confirmed the money but our flip failed (e.g. order was
       // cancelled mid-flight or a transient DB error). Log loudly so support

@@ -16,6 +16,7 @@ export default function FooterRoleLinks() {
 
   const items: Array<[string, string]> = [
     ["My Orders", getOrdersRouteForRole(role)],
+    ["Become an Affiliate", "/affiliate/register"],
     ...(role === "VENDOR" || role === "DELIVERY_PARTNER"
       ? []
       : [

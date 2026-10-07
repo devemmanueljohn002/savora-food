@@ -11,6 +11,8 @@ const bodySchema = z.object({
   // per-rider policy and the locked wallet balance.
   amountKobo: z.number().int().positive(),
   idempotencyKey: z.string().trim().max(100).optional().nullable(),
+  // 6-digit email OTP from POST /rider/withdrawals/otp (single-use).
+  otpCode: z.string().trim().max(10).optional().nullable(),
 });
 
 /** Rider wallet + limits + bank account + withdrawal history.
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
       owner,
       amountKobo: parsed.data.amountKobo,
       idempotencyKey: parsed.data.idempotencyKey,
+      otpCode: parsed.data.otpCode,
     });
     if (result.duplicate) {
       return NextResponse.json(ok({ ...toWithdrawalResponse(result.withdrawal), duplicate: true }));

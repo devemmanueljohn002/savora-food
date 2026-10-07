@@ -133,9 +133,9 @@ describe("penalties, negative balances, and the withdrawal gate", () => {
   });
 
   it("validateWithdrawalAmount rejects when penalties drove the balance negative", () => {
-    expect(() => validateWithdrawalAmount(100_000, -2_500)).toThrowError(ApiError);
+    expect(() => validateWithdrawalAmount(1_000_000, -2_500)).toThrowError(ApiError);
     try {
-      validateWithdrawalAmount(100_000, -2_500);
+      validateWithdrawalAmount(1_000_000, -2_500);
       expect.unreachable();
     } catch (error) {
       expect((error as ApiError).code).toBe("CONFLICT");

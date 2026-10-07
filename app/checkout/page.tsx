@@ -37,6 +37,7 @@ function CheckoutInner() {
   const [notice, setNotice] = useState("");
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   const items = cart?.items ?? [];
   const defaultAddressId = addresses?.find((address) => address.isDefault)?.id ?? addresses?.[0]?.id ?? "";
@@ -125,6 +126,7 @@ function CheckoutInner() {
         addressId: selected,
         deliveryInstructions: instructions || undefined,
         ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+        ...(referralCode.trim() ? { referralCode: referralCode.trim().toUpperCase() } : {}),
       });
       setOrders(result.orders);
     } catch (reason) {
@@ -323,6 +325,19 @@ function CheckoutInner() {
         <p className="muted" style={{ fontSize: 13 }}>
           Delivery fee is added per order based on your delivery city.
         </p>
+        <div style={{ marginTop: 12 }}>
+          <label htmlFor="referral">Referral code (optional)</label>
+          <input
+            id="referral"
+            value={referralCode}
+            placeholder="e.g. JOHN123"
+            style={{ textTransform: "uppercase" }}
+            onChange={(event) => setReferralCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+          />
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+            Got a referral link? Its code applies automatically — typing one here overrides it.
+          </p>
+        </div>
         <button
           type="button"
           className="btn"

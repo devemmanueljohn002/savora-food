@@ -4,6 +4,7 @@ import PayoutPanel from "@/components/PayoutPanel";
 import { VendorShell, VendorSignIn, formatNaira } from "@/components/VendorShell";
 import {
   useRequestVendorWithdrawal,
+  useRequestVendorWithdrawalOtp,
   useSaveVendorRecipient,
   usePayoutBanks,
   useVendorEarnings,
@@ -21,6 +22,7 @@ export default function VendorPayoutsPage() {
   const banks = usePayoutBanks();
   const saveRecipient = useSaveVendorRecipient();
   const requestWithdrawal = useRequestVendorWithdrawal();
+  const requestOtp = useRequestVendorWithdrawalOtp();
 
   if (profile.isLoading) {
     return (
@@ -82,6 +84,7 @@ export default function VendorPayoutsPage() {
               resolvePayoutBankAccount({ account_number: input.accountNumber, bank_code: input.bankCode })
             }
             onSaveAccount={(input) => saveRecipient.mutateAsync(input)}
+            onRequestOtp={() => requestOtp.mutateAsync()}
             onWithdraw={(input) => requestWithdrawal.mutateAsync(input)}
           />
 

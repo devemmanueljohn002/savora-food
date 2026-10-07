@@ -18,7 +18,7 @@ const actionSchema = z.object({
   amountNaira: z.number().positive().max(10_000_000).optional(),
   reason: z.string().trim().max(300).optional().nullable(),
   // Only for bonus/penalty: which wallet to adjust.
-  ownerType: z.enum(["VENDOR", "RIDER"]).optional(),
+  ownerType: z.enum(["VENDOR", "RIDER", "AFFILIATE"]).optional(),
   ownerId: z.string().trim().uuid().optional(),
 });
 
@@ -93,12 +93,16 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     }
 
     // Approve: funds were already locked at request time, so executing now is
-    // safe. Ambiguous Paystack failures park as PROCESSING (webhook decides).
+    // safe. Sends the NET amount (after the stored fee snapshot) with the
+    // per-owner Paystack reason. Ambiguous Paystack failures park as PROCESSING.
+    const netKobo =
+      withdrawal.net_kobo != null ? Number(withdrawal.net_kobo) : Number(withdrawal.amount_kobo);
     const updated = await initiateTransferAndRecord({
       withdrawalId: id,
-      amountKobo: Number(withdrawal.amount_kobo),
+      amountKobo: netKobo,
       recipientCode: withdrawal.recipient_code,
       reference: withdrawal.reference,
+      ownerType: withdrawal.owner_type,
     });
 
     await sql`
