@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { hashPassword } from "@/server/auth/password";
 import { createUser, createDeliveryPartnerProfile, createVendorProfile, getUserByEmail, createEmailVerificationToken } from "@/server/auth/store";
+import { AFFILIATE_COOKIE, resolveSignupReferrer } from "@/server/affiliates";
 import { startSession, toPublicUser } from "@/server/auth/session-flow";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
 import { getEnv } from "@/server/env";
@@ -35,7 +36,7 @@ function uniqueViolation(error: unknown): boolean {
   );
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => null);
     const parsed = registerSchema.safeParse(body);
@@ -51,6 +52,14 @@ export async function POST(request: Request) {
       throw ApiError.conflict("An account with this email already exists. Try signing in.");
     }
 
+    // Referral attribution for NEW signups only: save the referrer from the
+    // /ref/[code] cookie once (never updated afterwards). Invalid codes and
+    // self-referrals (same phone) resolve to null — signup always succeeds.
+    const referredByAffiliateId = await resolveSignupReferrer(
+      request.cookies.get(AFFILIATE_COOKIE)?.value ?? null,
+      input.phone ?? null,
+    ).catch(() => null);
+
     const passwordHash = await hashPassword(input.password);
     const role = dbRole(input.role);
     const user = await createUser({
@@ -60,6 +69,7 @@ export async function POST(request: Request) {
       lastName: input.lastName,
       phone: input.phone ?? undefined,
       role,
+      referredByAffiliateId,
     });
 
     if (role === "VENDOR") {

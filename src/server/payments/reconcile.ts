@@ -60,13 +60,6 @@ export async function reconcileStuckPayments(
     }
     try {
       await markOrderPaymentPaid(row.order_id, row.user_id, row.reference);
-      // Backfill any affiliate commission for manually reconciled payments.
-      try {
-        const { confirmAffiliateCommission } = await import("@/server/affiliates");
-        await confirmAffiliateCommission(row.order_id);
-      } catch {
-        // auditable via the missing commission row
-      }
       confirmed += 1;
     } catch (error) {
       skipped.push(`${row.order_number}: Paystack success but order update failed`);

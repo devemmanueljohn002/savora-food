@@ -11,6 +11,7 @@ import {
   normalizePhoneForCompare,
   normalizeReferralCode,
   resolveAttributionCode,
+  resolveCheckoutReferrer,
 } from "@/server/affiliates";
 
 describe("commission math", () => {
@@ -64,6 +65,17 @@ describe("attribution precedence", () => {
   it("rejects malformed codes", () => {
     expect(() => normalizeReferralCode("ab")).toThrow();
     expect(normalizeReferralCode(" john-123 ")).toBe("JOHN123");
+  });
+
+  it("attaches only the signup-saved referrer at checkout", () => {
+    // Saved referrer + matching/empty wanted code → attach.
+    expect(resolveCheckoutReferrer("JOHN123", "JOHN123")).toBe("JOHN123");
+    expect(resolveCheckoutReferrer("JOHN123", null)).toBe("JOHN123");
+    // No saved referrer (existing account) → never attach.
+    expect(resolveCheckoutReferrer(null, "JOHN123")).toBeNull();
+    expect(resolveCheckoutReferrer(null, null)).toBeNull();
+    // Foreign typed code or another affiliate's cookie → ignore.
+    expect(resolveCheckoutReferrer("JOHN123", "JANE999")).toBeNull();
   });
 });
 

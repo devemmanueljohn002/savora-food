@@ -10,6 +10,7 @@ export type UserRow = {
   role: string;
   status: string;
   google_sub: string | null;
+  referred_by_affiliate_id: string | null;
   email_verified_at: Date | null;
   last_login_at: Date | null;
   created_at: Date;
@@ -46,9 +47,11 @@ export async function createUser(input: {
   phone?: string;
   role?: string;
   googleSub?: string | null;
+  /** Referrer saved once at signup — never updated afterwards. */
+  referredByAffiliateId?: string | null;
 }): Promise<UserRow> {
   const rows = await db()<UserRow[]>`
-    INSERT INTO users (email, password_hash, first_name, last_name, phone, role, google_sub)
+    INSERT INTO users (email, password_hash, first_name, last_name, phone, role, google_sub, referred_by_affiliate_id)
     VALUES (
       ${input.email.toLowerCase()},
       ${input.passwordHash},
@@ -56,7 +59,8 @@ export async function createUser(input: {
       ${input.lastName ?? ""},
       ${input.phone ?? null},
       ${input.role ?? "CUSTOMER"},
-      ${input.googleSub ?? null}
+      ${input.googleSub ?? null},
+      ${input.referredByAffiliateId ?? null}
     )
     RETURNING *
   `;
@@ -151,7 +155,7 @@ export async function getSessionByRefreshHash(refreshTokenHash: string): Promise
   const rows = await db()<UserWithSession[]>`
     SELECT
       u.id, u.email, u.phone, u.password_hash, u.first_name, u.last_name,
-      u.role, u.status, u.google_sub, u.email_verified_at, u.last_login_at, u.created_at,
+      u.role, u.status, u.google_sub, u.referred_by_affiliate_id, u.email_verified_at, u.last_login_at, u.created_at,
       s.id AS session_id, s.created_at AS session_created_at, s.expires_at AS session_expires_at
     FROM sessions s
     JOIN users u ON u.id = s.user_id
@@ -172,6 +176,7 @@ export async function getSessionByRefreshHash(refreshTokenHash: string): Promise
     role: row.role,
     status: row.status,
     google_sub: row.google_sub,
+    referred_by_affiliate_id: row.referred_by_affiliate_id,
     email_verified_at: row.email_verified_at,
     last_login_at: row.last_login_at,
     created_at: row.created_at,

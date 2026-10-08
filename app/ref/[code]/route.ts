@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { absoluteUrl } from "@/lib/site-url";
-import { AFFILIATE_COOKIE, getCommissionConfig, recordClick } from "@/server/affiliates";
+import { AFFILIATE_COOKIE, recordClick } from "@/server/affiliates";
 
 /** Link-preview crawlers (WhatsApp, X, Facebook…) that need OG tags. */
 const BOT_UA =
@@ -47,10 +47,11 @@ function previewHtml(code: string): string {
 }
 
 /**
- * Referral link landing: /ref/JOHN123. Logs the click, plants the 7-day
- * attribution cookie (always overwritten → most recent click wins), then
- * sends the shopper to the homepage. Unknown/inactive codes still redirect
- * (no cookie) so links never 404.
+ * Referral link landing: /ref/JOHN123. Logs the click, plants the 30-day
+ * httpOnly attribution cookie (always overwritten → most recent click wins),
+ * then sends the shopper to the public homepage. Never shows referrer data
+ * and never logs anyone in. Unknown/inactive codes still redirect (no cookie)
+ * so links never 404.
  */
 export async function GET(request: NextRequest, ctx: { params: Promise<{ code: string }> }) {
   const { code } = await ctx.params;
@@ -81,14 +82,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ code: s
   ).catch(() => undefined);
   if (!affiliate) return response;
 
-  const config = await getCommissionConfig().catch(() => null);
-  const days = config?.attributionDays ?? 7;
+  // 30-day httpOnly referral cookie (last click wins — each visit overwrites).
   response.cookies.set(AFFILIATE_COOKIE, affiliate.code, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: days * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   });
   return response;
 }

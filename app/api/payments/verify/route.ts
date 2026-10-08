@@ -85,14 +85,6 @@ export async function GET(request: NextRequest) {
     // complete the flip; support can reconcile by reference.
     try {
       await markOrderPaymentPaid(order.id, user.id, reference);
-      // Affiliate commission becomes PENDING now that the order is paid
-      // (best-effort; idempotent — webhook/verify races resolve to one row).
-      try {
-        const { confirmAffiliateCommission } = await import("@/server/affiliates");
-        await confirmAffiliateCommission(order.id);
-      } catch {
-        // auditable via the missing commission row; reconcile can backfill
-      }
     } catch (error) {
       console.error("[payments/verify] Paystack success but order update failed:", {
         reference,

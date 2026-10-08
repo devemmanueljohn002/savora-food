@@ -16,6 +16,7 @@ import {
 import { getDashboardRouteForRole } from "@/lib/role-routes";
 import { ApiError } from "@/server/errors";
 import { db } from "@/server/db";
+import { AFFILIATE_COOKIE, resolveSignupReferrer } from "@/server/affiliates";
 
 function fail(request: NextRequest, code: string, next: string | null): NextResponse {
   const url = new URL("/auth", request.url);
@@ -68,6 +69,12 @@ export async function GET(request: NextRequest) {
     }
     if (decision.action === "create") {
       try {
+        // New Google signups also pick up the /ref/[code] referrer once.
+        // Existing/linked accounts are never attached.
+        const referredByAffiliateId = await resolveSignupReferrer(
+          request.cookies.get(AFFILIATE_COOKIE)?.value ?? null,
+          null,
+        ).catch(() => null);
         user = await createUser({
           email: profile.email,
           passwordHash: googlePasswordPlaceholder(),
@@ -75,6 +82,7 @@ export async function GET(request: NextRequest) {
           lastName: profile.lastName,
           role: "CUSTOMER",
           googleSub: profile.sub,
+          referredByAffiliateId,
         });
       } catch (error) {
         // Email registered between check and insert: fall back to linking.

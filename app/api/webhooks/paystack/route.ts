@@ -222,14 +222,6 @@ export async function POST(request: NextRequest) {
 
     try {
       await markOrderPaymentPaid(payment.order_id, owner[0].user_id, reference);
-      // Affiliate commission becomes PENDING (ledger hold) now that the
-      // order is paid. Best-effort: payment stays confirmed regardless.
-      try {
-        const { confirmAffiliateCommission } = await import("@/server/affiliates");
-        await confirmAffiliateCommission(payment.order_id);
-      } catch {
-        // auditable via the missing commission row; reconcile can backfill
-      }
     } catch (error) {
       // Paystack confirmed the money but our flip failed (e.g. order was
       // cancelled mid-flight or a transient DB error). Log loudly so support

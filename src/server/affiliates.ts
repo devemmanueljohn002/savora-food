@@ -15,13 +15,18 @@ import type { Owner } from "./wallet";
  * - Commissionable base default: item SUBTOTAL only, delivery fee excluded,
  *   discounts subtracted (i.e. subtotal − discount). Tell the operator this
  *   default so they can confirm it.
- * - Attribution: a checkout code beats the cookie; the cookie always holds
- *   the MOST RECENT click (last write wins). 7-day cookie window.
+ * - Attribution: the referrer is saved on the user ONCE at signup (never
+ *   changed afterwards). Checkout only attaches the saved referrer — an
+ *   existing account opening /ref/[code] is never attached, and foreign
+ *   codes/cookies are ignored. 30-day referral cookie (last click wins).
  * - One commission per order (UNIQUE order_id + ON CONFLICT DO NOTHING).
- * - Commission is PENDING (ledger hold) until the order is DELIVERED, then
- *   released by releaseAffiliateHolds (see wallet.ts). Cancel/refund/
+ * - Commission is created only when the order reaches DELIVERED (delivery
+ *   verified) — never at signup or order placement — and is immediately
+ *   RELEASED into the affiliate's available balance. Cancel/refund/
  *   chargeback inserts an offsetting adjustment and marks REVERSED.
- * - Self-referral blocked by user id AND phone number.
+ * - Self-referral blocked by user id AND phone number at signup/checkout,
+ *   plus shared device (login IP + user agent) and shared payout account
+ *   at commission time.
  */
 
 export const AFFILIATE_COOKIE = "savora_aff";
@@ -127,6 +132,21 @@ export function resolveAttributionCode(checkoutCode: string | null | undefined, 
   return cookie || null;
 }
 
+/**
+ * Pure: checkout attaches ONLY the referrer saved at signup — never
+ * re-attributes. No saved referrer (existing accounts) → null. A wanted
+ * code that differs from the saved one (foreign typed code or another
+ * affiliate's cookie) → null.
+ */
+export function resolveCheckoutReferrer(
+  savedCode: string | null | undefined,
+  wantedCode: string | null | undefined,
+): string | null {
+  if (!savedCode) return null;
+  if (!wantedCode || wantedCode === savedCode) return savedCode;
+  return null;
+}
+
 /** Referral codes: uppercase letters/digits, 4–16 chars. */
 export function normalizeReferralCode(code: string): string {
   const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -165,6 +185,45 @@ export function isSelfReferral(input: {
 export function referralLinkFor(code: string): string {
   const base = getEnv().siteUrl ?? getEnv().appUrl;
   return `${base.replace(/\/+$/, "")}/ref/${code}`;
+}
+
+/** The referrer saved on the user at signup (set-once, never changed). */
+export async function getReferredAffiliate(
+  userId: string,
+): Promise<{ id: string; code: string } | null> {
+  const sql = db();
+  const rows = await sql<{ id: string; code: string }[]>`
+    SELECT a.id::text AS id, a.code FROM affiliates a
+    JOIN users u ON u.referred_by_affiliate_id = a.id
+    WHERE u.id = ${userId} AND a.status = 'ACTIVE' LIMIT 1
+  `;
+  return rows[0] ? { id: rows[0].id, code: rows[0].code } : null;
+}
+
+/**
+ * Resolve a signup-time referral code to an affiliate id, or null when it
+ * must not be saved: unknown/inactive code, or the same phone number as the
+ * affiliate (self-referral). Never throws — signup always succeeds.
+ */
+export async function resolveSignupReferrer(
+  code: string | null | undefined,
+  phone: string | null | undefined,
+): Promise<string | null> {
+  const clean = (code ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!clean) return null;
+  const affiliate = await getAffiliateByCode(clean).catch(() => undefined);
+  if (!affiliate || affiliate.status !== "ACTIVE") return null;
+  if (
+    isSelfReferral({
+      affiliateUserId: affiliate.user_id,
+      affiliatePhone: affiliate.phone,
+      orderUserId: "",
+      orderPhone: phone ?? null,
+    })
+  ) {
+    return null;
+  }
+  return affiliate.id;
 }
 
 export async function getAffiliateByUserId(userId: string): Promise<AffiliateRow | undefined> {
@@ -286,10 +345,55 @@ export async function attachAffiliateToOrders(input: {
 }
 
 /**
- * Create the PENDING commission (ledger hold) once the order is PAID.
- * Idempotent: UNIQUE(order_id) + ON CONFLICT DO NOTHING — replays, double
- * webhooks and re-verifies all resolve to the existing row. Best-effort:
- * callers must never fail payment confirmation on ledger errors.
+ * Shared device / payout-account signals that the referrer and the customer
+ * are the same person. Compares the most recent login fingerprint (IP +
+ * user agent) of both users, and whether the customer also holds an
+ * affiliate profile on the referrer's payout account number.
+ */
+async function hasSharedDeviceOrPayout(input: {
+  affiliateUserId: string;
+  affiliateBankAccount: string | null;
+  orderUserId: string;
+}): Promise<boolean> {
+  const sql = db();
+  const sessions = await sql<{ user_id: string; ip_address: string | null; user_agent: string | null }[]>`
+    SELECT DISTINCT ON (user_id) user_id::text AS user_id, ip_address, user_agent
+    FROM sessions
+    WHERE user_id = ANY(${sql.array([input.affiliateUserId, input.orderUserId])}::uuid[])
+      AND revoked_at IS NULL
+    ORDER BY user_id, created_at DESC
+  `;
+  if (sessions.length === 2) {
+    const norm = (value: string | null) => (value ?? "").trim().toLowerCase();
+    const [first, second] = sessions;
+    if (
+      norm(first.ip_address) &&
+      norm(first.ip_address) === norm(second.ip_address) &&
+      norm(first.user_agent) &&
+      norm(first.user_agent) === norm(second.user_agent)
+    ) {
+      return true;
+    }
+  }
+  const account = (input.affiliateBankAccount ?? "").replace(/\D/g, "");
+  if (account.length >= 10) {
+    const shared = await sql<{ found: string }[]>`
+      SELECT 1 AS found FROM affiliates
+      WHERE user_id = ${input.orderUserId}
+        AND NULLIF(regexp_replace(COALESCE(bank_account_number, ''), '\\D', '', 'g'), '') = ${account}
+      LIMIT 1
+    `;
+    if (shared.length > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Create the RELEASED commission (available balance) once the order reaches
+ * DELIVERED (delivery verified). Never runs at signup or order placement:
+ * non-delivered orders return null without writing anything. Idempotent:
+ * UNIQUE(order_id) + ON CONFLICT DO NOTHING. Best-effort: callers must
+ * never fail delivery confirmation on ledger errors.
  */
 export async function confirmAffiliateCommission(orderId: string): Promise<CommissionRow | null> {
   const sql = db();
@@ -309,7 +413,7 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
   const order = orders[0];
   if (!order?.affiliate_id) return null;
   if (order.payment_status !== "PAID") return null;
-  if (order.status === "CANCELLED" || order.status === "REFUNDED") return null;
+  if (order.status !== "DELIVERED") return null;
 
   const affiliates = await sql<AffiliateRow[]>`SELECT * FROM affiliates WHERE id = ${order.affiliate_id} LIMIT 1`;
   const affiliate = affiliates[0];
@@ -326,6 +430,15 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
   ) {
     return null;
   }
+  if (
+    await hasSharedDeviceOrPayout({
+      affiliateUserId: affiliate.user_id,
+      affiliateBankAccount: affiliate.bank_account_number,
+      orderUserId: order.user_id,
+    }).catch(() => false)
+  ) {
+    return null;
+  }
 
   const config = await getCommissionConfig();
   const { baseKobo, amountKobo } = computeCommissionKobo(
@@ -336,10 +449,11 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
   try {
     return await sql.begin(async (tx) => {
       const inserted = await tx<CommissionRow[]>`
-        INSERT INTO affiliate_commissions (affiliate_id, order_id, base_kobo, amount_kobo, mode, rate_snapshot)
+        INSERT INTO affiliate_commissions (affiliate_id, order_id, base_kobo, amount_kobo, mode, rate_snapshot, status, released_at)
         VALUES (
           ${affiliate.id}, ${orderId}, ${baseKobo}, ${amountKobo}, ${config.mode},
-          ${tx.json({ pct: config.pct, flatKobo: config.flatKobo, excludesDeliveryFee: config.excludesDeliveryFee, subtractsDiscount: config.subtractsDiscount })}
+          ${tx.json({ pct: config.pct, flatKobo: config.flatKobo, excludesDeliveryFee: config.excludesDeliveryFee, subtractsDiscount: config.subtractsDiscount })},
+          'RELEASED', NOW()
         )
         ON CONFLICT (order_id) DO NOTHING
         RETURNING *
@@ -355,21 +469,21 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
           VALUES (${owner.type}, ${owner.id}, 0, 0)
           ON CONFLICT (owner_type, owner_id) DO NOTHING
         `;
-        const wallets = await tx<{ pending_kobo: string }[]>`
-          SELECT pending_kobo::text AS pending_kobo FROM wallets
+        const wallets = await tx<{ available_kobo: string }[]>`
+          SELECT available_kobo::text AS available_kobo FROM wallets
           WHERE owner_type = ${owner.type} AND owner_id = ${owner.id} FOR UPDATE
         `;
-        const pending = Number(wallets[0]?.pending_kobo ?? 0) + amountKobo;
+        const available = Number(wallets[0]?.available_kobo ?? 0) + amountKobo;
         await tx`
-          UPDATE wallets SET pending_kobo = ${pending}, updated_at = NOW()
+          UPDATE wallets SET available_kobo = ${available}, updated_at = NOW()
           WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}
         `;
         await tx`
           INSERT INTO wallet_entries
             (owner_type, owner_id, kind, amount_kobo, balance_after_kobo, order_id, meta)
           VALUES (
-            ${owner.type}, ${owner.id}, 'hold', ${amountKobo}, ${pending}, ${orderId},
-            ${tx.json({ commissionId: inserted[0].id, baseKobo })}
+            ${owner.type}, ${owner.id}, 'release', ${amountKobo}, ${available}, ${orderId},
+            ${tx.json({ commissionId: inserted[0].id, baseKobo, releasedAtDelivery: true })}
           )
           ON CONFLICT DO NOTHING
         `;

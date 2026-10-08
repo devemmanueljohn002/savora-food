@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, type LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import HomeHero from "@/components/HomeHero";
+import InvitedBanner from "./InvitedBanner";
 import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CategoryCard from "@/components/CategoryCard";
@@ -113,6 +114,7 @@ export default async function Home() {
   return (
     <PageShell>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }} />
+      <InvitedBanner />
       <HomeHero />
 
       <section className="section container">

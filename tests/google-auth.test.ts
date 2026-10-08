@@ -19,6 +19,7 @@ function user(partial: Partial<UserRow> & { id: string }): UserRow {
     role: "CUSTOMER",
     status: "ACTIVE",
     google_sub: null,
+    referred_by_affiliate_id: null,
     email_verified_at: null,
     last_login_at: null,
     created_at: new Date(),

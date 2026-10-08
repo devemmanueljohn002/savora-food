@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireCustomer } from "@/server/auth/guard";
 import { createOrdersFromCart, expireStalePendingPayments } from "@/server/orders";
-import { AFFILIATE_COOKIE, attachAffiliateToOrders, normalizeReferralCode, resolveAttributionCode } from "@/server/affiliates";
+import { AFFILIATE_COOKIE, attachAffiliateToOrders, getReferredAffiliate, normalizeReferralCode, resolveAttributionCode, resolveCheckoutReferrer } from "@/server/affiliates";
 
 const bodySchema = z.object({
   addressId: z.string().uuid(),
@@ -26,15 +26,19 @@ export async function POST(request: NextRequest) {
     await expireStalePendingPayments(user.id, 20).catch(() => undefined);
     const result = await createOrdersFromCart(user.id, addressId, deliveryInstructions || undefined, couponCode);
 
-    // Affiliate attribution (a code typed at checkout wins over the
-    // referral-link cookie, which always holds the most recent click). The
-    // commission itself is only created once the order is PAID. An explicitly
-    // typed code is validated loudly (e.g. your own code); cookie failures
+    // Affiliate attribution for NEW referrals only: the referrer was saved
+    // on the user at signup (once, never changed). An existing account that
+    // merely opens /ref/[code] has no saved referrer and is never attached;
+    // foreign typed codes and cookies are ignored. The commission itself is
+    // only created once the order reaches DELIVERED. An explicitly typed
+    // code is validated loudly (e.g. your own code); cookie failures
     // never fail checkout.
+    const savedReferrer = await getReferredAffiliate(user.id).catch(() => null);
     const typed = parsed.data.referralCode?.trim()
       ? normalizeReferralCode(parsed.data.referralCode)
       : null;
-    const code = resolveAttributionCode(typed, request.cookies.get(AFFILIATE_COOKIE)?.value ?? null);
+    const wanted = resolveAttributionCode(typed, request.cookies.get(AFFILIATE_COOKIE)?.value ?? null);
+    const code = savedReferrer ? resolveCheckoutReferrer(savedReferrer.code, wanted) : null;
     if (code) {
       if (typed) {
         await attachAffiliateToOrders({
