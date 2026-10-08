@@ -6,7 +6,7 @@ import { absoluteUrl, siteUrl } from "@/lib/site-url";
 const SITE_NAME = "Savora Food";
 const DEFAULT_DESCRIPTION =
   "Savora Food delivers hot, freshly cooked meals from trusted local kitchens. Your Food. Your Choice. Delivered.";
-const DEFAULT_OG_IMAGE = absoluteUrl("/savora-logo-wide.png");
+const DEFAULT_OG_IMAGE = absoluteUrl("/og-image.jpg");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
