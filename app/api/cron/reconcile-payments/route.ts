@@ -4,19 +4,24 @@ import { ok, toEnvelope } from "@/server/errors";
 /**
  * Vercel Cron entry for stuck PENDING_PAYMENT recovery. Guarded by
  * CRON_SECRET (Bearer token) so the public can't trigger Paystack lookups.
- * Schedule in vercel.json: every 15 minutes.
+ * Vercel sends `Authorization: Bearer <CRON_SECRET>` automatically when the
+ * env var is set. Schedule in vercel.json: daily (Hobby plan allows only
+ * once-per-day crons). For 15-minute recovery, trigger this same route
+ * from an external scheduler (cron-job.org / GitHub Actions) with the
+ * Bearer token.
  */
 export async function GET(request: NextRequest) {
   try {
     const secret = process.env.CRON_SECRET?.trim();
-    if (secret) {
-      const supplied =
-        request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
-        request.nextUrl.searchParams.get("token")?.trim() ??
-        "";
-      if (supplied !== secret) {
-        return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
-      }
+    if (!secret) {
+      return NextResponse.json({ success: false, message: "Cron is not configured." }, { status: 500 });
+    }
+    const supplied =
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
+      request.nextUrl.searchParams.get("token")?.trim() ??
+      "";
+    if (supplied !== secret) {
+      return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
     }
     const { reconcileStuckPayments } = await import("@/server/payments/reconcile");
     const result = await reconcileStuckPayments({ limit: 50 });
