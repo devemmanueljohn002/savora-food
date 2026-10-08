@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import PageShell from "@/components/PageShell";
 import { Home, Search, RotateCcw } from "lucide-react";
