@@ -124,6 +124,8 @@ export async function sendVendorStatusEmail(
   try {
     await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
   } catch (error) {
-    console.error(`[email] vendor-${kind.toLowerCase()} to ${esc(to)} failed:`, error);
+    // Recipient address stays out of production logs.
+    const who = process.env.NODE_ENV === "production" ? "(redacted)" : esc(to);
+    console.error(`[email] vendor-${kind.toLowerCase()} to ${who} failed:`, error);
   }
 }

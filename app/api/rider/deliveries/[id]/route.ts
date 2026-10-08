@@ -149,13 +149,14 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       vendor_id: string;
       delivery_otp: string | null;
       delivery_code_hash: string | null;
+      delivery_code_salt: string | null;
       delivery_code_expires_at: Date | null;
       require_otp: boolean;
     }[]>`
       SELECT d.id, d.status, d.delivery_code_attempts,
              o.id AS order_id, o.order_number, o.status AS order_status,
              o.user_id AS customer_id, o.vendor_id,
-              o.delivery_otp, o.delivery_code_hash, o.delivery_code_expires_at, COALESCE(o.require_otp, FALSE) AS require_otp
+              o.delivery_otp, o.delivery_code_hash, o.delivery_code_salt, o.delivery_code_expires_at, COALESCE(o.require_otp, FALSE) AS require_otp
       FROM deliveries d
       JOIN orders o ON o.id = d.order_id
       WHERE d.id = ${id} AND d.delivery_partner_id = ${rider.id}
@@ -230,10 +231,11 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       // never at payment, so a code can never go stale before handover.
       // The customer sees it on tracking from this moment; the rider never
       // sees it in API responses and must collect it from the customer.
-      const { generateDeliveryOtp, getOtpEnabled, hashDeliveryCode } = await import("@/server/orders");
+      const { generateDeliveryOtp, getOtpEnabled, hashDeliveryCodeSalted, newDeliveryCodeSalt } = await import("@/server/orders");
       const otpEnabled = await getOtpEnabled().catch(() => true);
       const handoverCode = otpEnabled ? generateDeliveryOtp() : null;
-      const handoverHash = handoverCode ? hashDeliveryCode(handoverCode) : null;
+      const handoverSalt = handoverCode ? newDeliveryCodeSalt() : null;
+      const handoverHash = handoverCode && handoverSalt ? hashDeliveryCodeSalted(handoverCode, handoverSalt) : null;
       await sql.begin(async (tx) => {
         // Guarded transition: concurrent double-taps race here; the loser
         // gets zero rows back instead of minting a second code that would
@@ -250,10 +252,13 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         // transaction. If it didn't (and a code is required), roll everything
         // back so we never email a code that cannot verify.
         const stored = await tx<{ delivery_code_hash: string | null }[]>`
-          UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, delivery_code_expires_at = CASE WHEN ${handoverHash !== null} THEN NOW() + make_interval(hours => ${DELIVERY_CODE_TTL_HOURS}) ELSE NULL END, updated_at = NOW()
-          WHERE id = ${delivery.order_id}
+          UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, delivery_code_salt = ${handoverSalt}, require_otp = ${otpEnabled}, delivery_code_expires_at = CASE WHEN ${handoverHash !== null} THEN NOW() + make_interval(hours => ${DELIVERY_CODE_TTL_HOURS}) ELSE NULL END, updated_at = NOW()
+          WHERE id = ${delivery.order_id} AND status = ${delivery.order_status}
           RETURNING delivery_code_hash
         `;
+        if (stored.length === 0) {
+          throw ApiError.conflict("This order changed while you were picking it up. Please refresh.");
+        }
         if (otpEnabled && !stored[0]?.delivery_code_hash) {
           throw ApiError.internal("Could not issue the delivery code. Please try pickup again.");
         }
@@ -303,13 +308,21 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
           throw ApiError.validation("This delivery code has expired. Ask support to re-issue a new code.");
         }
         const { DELIVERY_CODE_MAX_ATTEMPTS, verifyDeliveryCode } = await import("@/server/orders");
-        if (delivery.delivery_code_attempts >= DELIVERY_CODE_MAX_ATTEMPTS) {
+        // Atomic attempt claim: increment-and-cap in one statement so parallel
+        // guesses each consume exactly one attempt and the 6th concurrent try
+        // locks even mid-race. A correct code presented after lockout stays
+        // locked (same as the sequential behavior).
+        const claimed = await sql<{ attempts: number }[]>`
+          UPDATE deliveries SET delivery_code_attempts = delivery_code_attempts + 1
+          WHERE id = ${id} AND delivery_code_attempts < ${DELIVERY_CODE_MAX_ATTEMPTS}
+          RETURNING delivery_code_attempts AS attempts
+        `;
+        if (claimed.length === 0) {
           throw ApiError.forbidden(
             `Too many wrong codes — this code is locked after ${DELIVERY_CODE_MAX_ATTEMPTS} attempts. Contact support to re-issue a new delivery code.`,
           );
         }
-        if (!verifyDeliveryCode(supplied, delivery.delivery_code_hash, delivery.delivery_otp)) {
-          await sql`UPDATE deliveries SET delivery_code_attempts = delivery_code_attempts + 1 WHERE id = ${id}`;
+        if (!verifyDeliveryCode(supplied, delivery.delivery_code_hash, delivery.delivery_otp, delivery.delivery_code_salt)) {
           throw ApiError.validation("Incorrect delivery code. It was not completed.");
         }
         otpVerified = true;
@@ -330,7 +343,17 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         if (updated.length === 0) {
           throw ApiError.conflict("This delivery was already closed.");
         }
-        await tx`UPDATE orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = ${delivery.order_id}`;
+        // Guarded order close: the status predicate pins the exact transition
+        // validated above, so a concurrent cancel wins and this commit loses
+        // instead of resurrecting a cancelled order as DELIVERED.
+        const closed = await tx<{ id: string }[]>`
+          UPDATE orders SET status = 'DELIVERED', updated_at = NOW()
+          WHERE id = ${delivery.order_id} AND status = ${delivery.order_status}
+          RETURNING id
+        `;
+        if (closed.length === 0) {
+          throw ApiError.conflict("This order changed while you were completing delivery. Please refresh.");
+        }
         await tx`
           INSERT INTO order_status_history (order_id, status, note)
           VALUES (${delivery.order_id}, 'DELIVERED', ${parsed.data.note ?? "Delivery verified with code"})
@@ -508,10 +531,16 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       if (updated.length === 0) {
         throw ApiError.conflict("This delivery was already closed.");
       }
-      await tx`
+      // Same guarded-write discipline as deliver: never resurrect a
+      // concurrently cancelled order back to READY_FOR_PICKUP.
+      const reopened = await tx<{ id: string }[]>`
         UPDATE orders SET status = 'READY_FOR_PICKUP', delivery_partner_id = NULL, updated_at = NOW()
-        WHERE id = ${delivery.order_id}
+        WHERE id = ${delivery.order_id} AND status = ${delivery.order_status}
+        RETURNING id
       `;
+      if (reopened.length === 0) {
+        throw ApiError.conflict("This order changed while you were reporting the failure. Please refresh.");
+      }
       await tx`
         INSERT INTO order_status_history (order_id, status, note)
         VALUES (${delivery.order_id}, 'READY_FOR_PICKUP', ${parsed.data.note ?? "Delivery failed; order released for reassignment"})

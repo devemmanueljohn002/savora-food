@@ -10,6 +10,9 @@ export type SessionUser = {
   id: string;
   role: string;
   email: string;
+  /** Session generation: bumped on logout-all / password reset to revoke
+   *  previously minted access tokens. Absent (legacy tokens) = generation 0. */
+  tokenVersion?: number;
 };
 
 type AccessTokenClaims = SessionUser & {
@@ -58,7 +61,14 @@ export async function signSessionToken(user: SessionUser): Promise<string> {
   const { jwtSecret, jwtIssuer, accessTokenTtlMinutes } = getEnv();
   const now = Math.floor(Date.now() / 1000);
 
-  return new SignJWT({ id: user.id, role: user.role, email: user.email })
+  return new SignJWT({
+    id: user.id,
+    role: user.role,
+    email: user.email,
+    // Generation tag: verifySessionToken rejects tokens whose generation no
+    // longer matches the user's row (bumped on logout-all / password reset).
+    ...(user.tokenVersion !== undefined ? { tokenVersion: user.tokenVersion } : {}),
+  })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt(now)
     .setIssuer(jwtIssuer)
@@ -81,7 +91,24 @@ export async function verifySessionToken(token: string): Promise<SessionUser> {
       throw new ApiError("UNAUTHORIZED", "Invalid session token");
     }
 
-    return { id: payload.id, role: payload.role, email: payload.email };
+    // Generation check: logout-all and password reset bump the user's row,
+    // instantly revoking previously minted access tokens (pre-migration
+    // tokens carry no tag and match generation 0).
+    const { db } = await import("../db");
+    const sql = db();
+    const rows = await sql<{ token_version: number | null }[]>`
+      SELECT token_version FROM users WHERE id = ${payload.id} LIMIT 1
+    `.catch(() => []);
+    if (!rows[0]) {
+      throw new ApiError("UNAUTHORIZED", "Your session has expired. Please sign in again.");
+    }
+    const current = Number(rows[0].token_version ?? 0);
+    const presented = typeof payload.tokenVersion === "number" ? payload.tokenVersion : 0;
+    if (presented !== current) {
+      throw new ApiError("UNAUTHORIZED", "Your session has expired. Please sign in again.");
+    }
+
+    return { id: payload.id, role: payload.role, email: payload.email, tokenVersion: presented };
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError("UNAUTHORIZED", "Your session has expired. Please sign in again.");

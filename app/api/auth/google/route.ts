@@ -10,12 +10,15 @@ import {
   oauthCookieOptions,
   sanitizeNext,
 } from "@/server/auth/google";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 /** Start "Continue with Google": mint CSRF state + PKCE verifier cookies,
  *  then bounce the browser to Google's consent page. */
 export async function GET(request: NextRequest) {
   const next = sanitizeNext(request.nextUrl.searchParams.get("next"));
   try {
+    const limit = limitByIp(request, "oauth-start", 30);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const state = newOAuthState();
     const verifier = newCodeVerifier();
     const url = buildGoogleAuthorizeUrl(next, { state, codeChallenge: codeChallengeS256(verifier) });

@@ -137,10 +137,10 @@ export function paystackMismatchReason(
     return `Payment not successful (${verified.status}).`;
   }
   const wantCurrency = expected.currency ?? "NGN";
-  if (verified.reference && verified.reference !== expected.reference) {
+  if (!verified.reference || verified.reference !== expected.reference) {
     return "Payment reference does not match this order.";
   }
-  if (verified.currency && verified.currency.toUpperCase() !== wantCurrency.toUpperCase()) {
+  if (!verified.currency || verified.currency.toUpperCase() !== wantCurrency.toUpperCase()) {
     return `Currency mismatch (expected ${wantCurrency}).`;
   }
   if (verified.amount === null || verified.amount !== expected.amountKobo) {

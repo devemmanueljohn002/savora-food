@@ -80,8 +80,15 @@ function AuthCard() {
     window.history.replaceState(null, "", url);
   }
 
+  function isSafeNext(value: string): boolean {
+    if (!value.startsWith("/") || value.startsWith("//")) return false;
+    if (value.includes("\\")) return false;
+    if (/[\u0000-\u001f\u007f]/.test(value)) return false;
+    return true;
+  }
+
   function destination(roleName: string) {
-    return next.startsWith("/") && !next.startsWith("//") ? next : dashboardForRole(roleName);
+    return isSafeNext(next) ? next : dashboardForRole(roleName);
   }
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -149,7 +156,7 @@ function AuthCard() {
           onClick={() => {
             setError("");
             setNotice("");
-            const target = next.startsWith("/") && !next.startsWith("//")
+            const target = isSafeNext(next)
               ? `/api/auth/google?next=${encodeURIComponent(next)}`
               : "/api/auth/google";
             window.location.href = target;

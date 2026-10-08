@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { okMessage, toEnvelope } from "@/server/errors";
 import { REFRESH_COOKIE, clearAuthCookies } from "@/server/auth/session";
-import { getSessionByRefreshHash, revokeSession } from "@/server/auth/store";
+import { getSessionByRefreshHash, revokeAllSessionsForUser, revokeSession } from "@/server/auth/store";
 import { hashToken } from "@/server/auth/tokens";
 
 export async function POST(request: import("next/server").NextRequest) {
@@ -11,6 +11,9 @@ export async function POST(request: import("next/server").NextRequest) {
       const session = await getSessionByRefreshHash(hashToken(refreshToken));
       if (session) {
         await revokeSession(session.session_id);
+        // Global logout: bump the token generation so previously minted
+        // access tokens (including on other devices) stop verifying.
+        await revokeAllSessionsForUser(session.id).catch(() => undefined);
       }
     }
 

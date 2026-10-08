@@ -11,6 +11,7 @@ export type UserRow = {
   status: string;
   google_sub: string | null;
   referred_by_affiliate_id: string | null;
+  token_version: number;
   email_verified_at: Date | null;
   last_login_at: Date | null;
   created_at: Date;
@@ -163,7 +164,7 @@ export async function getSessionByRefreshHash(refreshTokenHash: string): Promise
   const rows = await db()<UserWithSession[]>`
     SELECT
       u.id, u.email, u.phone, u.password_hash, u.first_name, u.last_name,
-      u.role, u.status, u.google_sub, u.referred_by_affiliate_id, u.email_verified_at, u.last_login_at, u.created_at,
+      u.role, u.status, u.google_sub, u.referred_by_affiliate_id, u.token_version, u.email_verified_at, u.last_login_at, u.created_at,
       s.id AS session_id, s.created_at AS session_created_at, s.expires_at AS session_expires_at
     FROM sessions s
     JOIN users u ON u.id = s.user_id
@@ -185,6 +186,7 @@ export async function getSessionByRefreshHash(refreshTokenHash: string): Promise
     status: row.status,
     google_sub: row.google_sub,
     referred_by_affiliate_id: row.referred_by_affiliate_id,
+    token_version: row.token_version,
     email_verified_at: row.email_verified_at,
     last_login_at: row.last_login_at,
     created_at: row.created_at,
@@ -196,8 +198,43 @@ export async function revokeSession(sessionId: string): Promise<void> {
   await db()`UPDATE sessions SET revoked_at = NOW() WHERE id = ${sessionId}`;
 }
 
+/**
+ * Atomic refresh rotation: mint the replacement session and revoke the old
+ * one in ONE transaction, so a crash or concurrent double-refresh can never
+ * leave two live refresh tokens for the same session.
+ */
+export async function rotateRefreshSession(input: {
+  oldSessionId: string;
+  userId: string;
+  refreshTokenHash: string;
+  userAgent?: string;
+  ipAddress?: string;
+  refreshTokenTtlDays: number;
+}): Promise<{ id: string; expires_at: Date }> {
+  const sql = db();
+  return sql.begin(async (tx) => {
+    const rows = await tx<{ id: string; expires_at: Date }[]>`
+      INSERT INTO sessions (user_id, refresh_token_hash, user_agent, ip_address, expires_at)
+      VALUES (
+        ${input.userId},
+        ${input.refreshTokenHash},
+        ${input.userAgent ?? null},
+        ${input.ipAddress ?? null},
+        NOW() + make_interval(days => ${input.refreshTokenTtlDays})
+      )
+      RETURNING id, expires_at
+    `;
+    await tx`UPDATE sessions SET revoked_at = NOW() WHERE id = ${input.oldSessionId}`;
+    return rows[0];
+  });
+}
+
 export async function revokeAllSessionsForUser(userId: string): Promise<void> {
-  await db()`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${userId} AND revoked_at IS NULL`;
+  const sql = db();
+  // Bumping token_version instantly revokes previously minted stateless
+  // access tokens too (logout-all, password reset, refresh-theft response).
+  await sql`UPDATE users SET token_version = token_version + 1, updated_at = NOW() WHERE id = ${userId}`;
+  await sql`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${userId} AND revoked_at IS NULL`;
 }
 
 /**
@@ -224,7 +261,14 @@ export async function createPasswordResetToken(input: {
   // and throw. `mins` accepts whole minutes.
   expiresMinutes: number;
 }): Promise<void> {
-  await db()`
+  const sql = db();
+  // Single live token per user: re-issuing revokes previously issued
+  // (still unused) links so older emails cannot be replayed afterwards.
+  await sql`
+    UPDATE password_reset_tokens SET used_at = NOW()
+    WHERE user_id = ${input.userId} AND used_at IS NULL
+  `;
+  await sql`
     INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
     VALUES (${input.userId}, ${input.tokenHash}, NOW() + make_interval(mins => ${input.expiresMinutes}))
   `;

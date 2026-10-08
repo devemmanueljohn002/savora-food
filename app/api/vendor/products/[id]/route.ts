@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext } from "@/server/vendors";
 import { assertPersistentImageUrl, normalizeImageUrl } from "@/server/product-images";
+import { storedImageUrl } from "@/lib/safe-url";
 import { db } from "@/server/db";
 
 const updateSchema = z.object({
@@ -13,7 +14,7 @@ const updateSchema = z.object({
   price: z.number().min(0).max(100000000).optional(),
   compareAtPrice: z.number().min(0).max(100000000).optional().nullable(),
   costPrice: z.number().min(0).max(100000000).optional().nullable(),
-  imageUrl: z.string().trim().max(500).optional().nullable(),
+  imageUrl: storedImageUrl("Enter a valid product image URL."),
   ingredients: z.array(z.string().trim().max(200)).max(50).optional().nullable(),
   prepInfo: z.string().trim().max(1000).optional().nullable(),
   preparationMinutes: z.number().int().min(0).max(10080).optional().nullable(),

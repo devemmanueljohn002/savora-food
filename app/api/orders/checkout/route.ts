@@ -25,6 +25,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { addressId, deliveryInstructions, couponCode } = parsed.data;
+    // Validate the typed referral code BEFORE creating orders: a malformed
+    // code must 400 without minting PENDING_PAYMENT orders that hold stock.
+    const typed = parsed.data.referralCode?.trim()
+      ? normalizeReferralCode(parsed.data.referralCode)
+      : null;
     // Reap this shopper's own expired unpaid checkouts first (frees stock).
     await expireStalePendingPayments(user.id, 20).catch(() => undefined);
     const result = await createOrdersFromCart(user.id, addressId, deliveryInstructions || undefined, couponCode);
@@ -37,9 +42,6 @@ export async function POST(request: NextRequest) {
     // code is validated loudly (e.g. your own code); cookie failures
     // never fail checkout.
     const savedReferrer = await getReferredAffiliate(user.id).catch(() => null);
-    const typed = parsed.data.referralCode?.trim()
-      ? normalizeReferralCode(parsed.data.referralCode)
-      : null;
     const wanted = resolveAttributionCode(typed, request.cookies.get(AFFILIATE_COOKIE)?.value ?? null);
     const code = savedReferrer ? resolveCheckoutReferrer(savedReferrer.code, wanted) : null;
     if (code) {

@@ -2,12 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireRole, ROLES } from "@/server/auth/guard";
+import { storedDocumentUrl } from "@/lib/safe-url";
 import { getRiderByUserId } from "@/server/riders";
 import { db } from "@/server/db";
 
 const documentSchema = z.object({
   kind: z.enum(["DRIVERS_LICENSE", "PROOF_OF_IDENTITY", "PROFILE_PHOTO", "VEHICLE_DOCUMENT", "OTHER"]),
-  url: z.string().trim().min(1, "Upload a document first.").max(500),
+  url: storedDocumentUrl(),
 });
 
 export async function POST(request: NextRequest) {

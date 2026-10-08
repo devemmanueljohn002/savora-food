@@ -20,6 +20,7 @@ function user(partial: Partial<UserRow> & { id: string }): UserRow {
     status: "ACTIVE",
     google_sub: null,
     referred_by_affiliate_id: null,
+    token_version: 0,
     email_verified_at: null,
     last_login_at: null,
     created_at: new Date(),

@@ -98,10 +98,12 @@ export async function GET(request: NextRequest) {
     if (decision.action === "create") {
       try {
         // New Google signups also pick up the /ref/[code] referrer once.
-        // Existing/linked accounts are never attached.
+        // Existing/linked accounts are never attached. The verified Google
+        // email doubles as the self-referral signal (no phone at this point).
         const referredByAffiliateId = await resolveSignupReferrer(
           request.cookies.get(AFFILIATE_COOKIE)?.value ?? null,
           null,
+          profile.email,
         ).catch(() => null);
         user = await createUser({
           email: profile.email,

@@ -8,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CategoryCard from "@/components/CategoryCard";
 import { absoluteUrl } from "@/lib/site-url";
+import { toJsonLdScript } from "@/lib/safe-json";
 import {
   listCategories,
   listCateringPackages,
@@ -113,7 +114,7 @@ export default async function Home() {
 
   return (
     <PageShell>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdScript(ORG_JSON_LD) }} />
       <InvitedBanner />
       <HomeHero />
 

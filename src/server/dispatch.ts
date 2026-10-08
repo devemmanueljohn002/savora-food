@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import type { TransactionSql } from "postgres";
 import { db } from "./db";
 import { assertOrderTransition } from "./order-transitions";
@@ -44,6 +44,19 @@ export function canTransitionDelivery(from: string, to: string): boolean {
 
 export function hashDeliveryCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
+}
+
+/**
+ * Salted handover-code hash (`v1$salt$digest`, per-order 128-bit salt).
+ * Unsalted SHA-256 over 4 digits is rainbow-trivial on DB read; new codes
+ * are minted salted while legacy rows keep verifying via hashDeliveryCode.
+ */
+export function newDeliveryCodeSalt(): string {
+  return randomBytes(16).toString("hex");
+}
+
+export function hashDeliveryCodeSalted(code: string, salt: string): string {
+  return `v1$${salt}$${createHash("sha256").update(salt + code.trim()).digest("hex")}`;
 }
 
 // ── Open board dispatch (v2: first-claim wins) ──────────────────────────────

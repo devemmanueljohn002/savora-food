@@ -209,6 +209,7 @@ export async function getReferredAffiliate(
 export async function resolveSignupReferrer(
   code: string | null | undefined,
   phone: string | null | undefined,
+  email?: string | null | undefined,
 ): Promise<string | null> {
   const clean = (code ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!clean) return null;
@@ -223,6 +224,16 @@ export async function resolveSignupReferrer(
     })
   ) {
     return null;
+  }
+  // Email leg (covers phoneless Google signups): the affiliate owner's login
+  // email matching the new signup's verified email means same human.
+  const signupEmail = (email ?? "").trim().toLowerCase();
+  if (signupEmail) {
+    const sql = db();
+    const owners = await sql<{ email: string | null }[]>`
+      SELECT email FROM users WHERE id = ${affiliate.user_id} LIMIT 1
+    `.catch(() => []);
+    if ((owners[0]?.email ?? "").trim().toLowerCase() === signupEmail) return null;
   }
   return affiliate.id;
 }
@@ -351,10 +362,25 @@ export async function attachAffiliateToOrders(input: {
   ) {
     throw ApiError.validation("You cannot use your own referral code.");
   }
+  // Defense in depth (the route layer also gates on the saved referrer):
+  // only the signup-saved referrer may stamp, never a foreign code, and an
+  // already-attributed order is never re-stamped.
+  const saved = await getReferredAffiliate(input.userId).catch(() => null);
+  if (!saved || saved.code !== affiliate.code) return null;
+  if (
+    await hasSharedDeviceOrPayout({
+      affiliateUserId: affiliate.user_id,
+      affiliateBankAccount: affiliate.bank_account_number,
+      orderUserId: input.userId,
+    }).catch(() => false)
+  ) {
+    return null;
+  }
   await sql`
     UPDATE orders
     SET affiliate_code = ${affiliate.code}, affiliate_id = ${affiliate.id}
     WHERE id = ANY(${sql.array(input.orderIds)}::uuid[]) AND user_id = ${input.userId}
+      AND (affiliate_id IS NULL OR affiliate_id = ${affiliate.id})
   `;
   return affiliate;
 }
@@ -371,11 +397,14 @@ async function hasSharedDeviceOrPayout(input: {
   orderUserId: string;
 }): Promise<boolean> {
   const sql = db();
+  // Only recent sessions count: stale logins must not permanently taint a
+  // user, and exact IP+UA matches on shared networks are already narrow.
   const sessions = await sql<{ user_id: string; ip_address: string | null; user_agent: string | null }[]>`
     SELECT DISTINCT ON (user_id) user_id::text AS user_id, ip_address, user_agent
     FROM sessions
     WHERE user_id = ANY(${sql.array([input.affiliateUserId, input.orderUserId])}::uuid[])
       AND revoked_at IS NULL
+      AND created_at > NOW() - make_interval(days => 30)
     ORDER BY user_id, created_at DESC
   `;
   if (sessions.length === 2) {

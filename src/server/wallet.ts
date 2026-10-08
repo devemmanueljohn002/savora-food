@@ -669,45 +669,52 @@ export async function applyAdjustment(input: {
 export async function releaseAffiliateHolds(owner: Owner, holdDays: number): Promise<number> {
   const sql = db();
   const days = Math.max(0, Math.round(holdDays));
-  const matured = await sql<{ entry_id: string; amount_kobo: string; order_id: string }[]>`
-    SELECT h.id AS entry_id, h.amount_kobo::text AS amount_kobo, h.order_id::text AS order_id
-    FROM wallet_entries h
-    JOIN orders o ON o.id = h.order_id
-    LEFT JOIN deliveries d ON d.order_id = h.order_id
-    WHERE h.owner_type = 'AFFILIATE' AND h.owner_id = ${owner.id}
-      AND h.kind = 'hold'
-      AND o.status = 'DELIVERED'
-      AND (
-        ${days} = 0
-        OR COALESCE(d.delivered_at, o.updated_at) < NOW() - make_interval(days => ${days})
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM wallet_entries r
-        WHERE r.owner_type = 'AFFILIATE' AND r.owner_id = ${owner.id}
-          AND r.kind = 'release' AND r.order_id = h.order_id
-      )
-  `;
-  if (matured.length === 0) return 0;
   let released = 0;
   await sql.begin(async (tx) => {
     const balances = await lockWalletTx(tx, owner);
+    // Matured-set selection runs INSIDE the tx after the wallet row lock is
+    // held, so concurrent releasers serialize here instead of both passing
+    // the NOT EXISTS check outside. Belt and suspenders with the partial
+    // unique index on release rows (migration 025): the INSERT below returns
+    // zero rows for a loser, and balances mutate only on a returned row.
+    const matured = await tx<{ entry_id: string; amount_kobo: string; order_id: string }[]>`
+      SELECT h.id AS entry_id, h.amount_kobo::text AS amount_kobo, h.order_id::text AS order_id
+      FROM wallet_entries h
+      JOIN orders o ON o.id = h.order_id
+      LEFT JOIN deliveries d ON d.order_id = h.order_id
+      WHERE h.owner_type = 'AFFILIATE' AND h.owner_id = ${owner.id}
+        AND h.kind = 'hold'
+        AND o.status = 'DELIVERED'
+        AND (
+          ${days} = 0
+          OR COALESCE(d.delivered_at, o.updated_at) < NOW() - make_interval(days => ${days})
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM wallet_entries r
+          WHERE r.owner_type = 'AFFILIATE' AND r.owner_id = ${owner.id}
+            AND r.kind = 'release' AND r.order_id = h.order_id
+        )
+    `;
+    if (matured.length === 0) return;
     let available = balances.available;
     let pending = balances.pending;
     for (const row of matured) {
       const amountKobo = toInt(row.amount_kobo);
       if (amountKobo <= 0) continue;
-      pending = Math.max(0, pending - amountKobo);
-      available += amountKobo;
-      released += amountKobo;
-      await tx`
+      const inserted = await tx<{ id: string }[]>`
         INSERT INTO wallet_entries
           (owner_type, owner_id, kind, amount_kobo, balance_after_kobo, order_id, meta)
         VALUES (
-          ${owner.type}, ${owner.id}, 'release', ${amountKobo}, ${available}, ${row.order_id},
+          ${owner.type}, ${owner.id}, 'release', ${amountKobo}, ${available + amountKobo}, ${row.order_id},
           ${tx.json({ releasedAfterDays: days })}
         )
         ON CONFLICT DO NOTHING
+        RETURNING id
       `;
+      if (inserted.length === 0) continue;
+      pending = Math.max(0, pending - amountKobo);
+      available += amountKobo;
+      released += amountKobo;
       await tx`
         UPDATE affiliate_commissions
         SET status = 'RELEASED', released_at = COALESCE(released_at, NOW())

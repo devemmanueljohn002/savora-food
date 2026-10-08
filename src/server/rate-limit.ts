@@ -8,9 +8,7 @@ import { NextResponse } from "next/server";
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export function searchRateLimitKey(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() || "unknown";
-  return `search:${ip}`;
+  return `search:${clientIp(request)}`;
 }
 
 export function checkRateLimit(key: string, limit = 60, windowMs = 60_000): { ok: boolean; retryAfter: number } {
@@ -34,8 +32,16 @@ export function rateLimitedResponse(retryAfter: number): NextResponse {
   );
 }
 
-/** Client IP for rate-limit keys (first entry of X-Forwarded-For). */
+/**
+ * Client IP for rate-limit keys. Prefers edge-set headers that clients
+ * cannot spoof (Vercel overwrites x-real-ip) over the easily forged
+ * X-Forwarded-For. Single-instance memory bucket remains best-effort:
+ * use Redis/Upstash for cross-instance auth/OTP limits (documented
+ * follow-up, not wired here).
+ */
 export function clientIp(request: Request): string {
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || "unknown";
 }

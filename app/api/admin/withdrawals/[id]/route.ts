@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { auditLog, requireAdminUser } from "@/server/admin";
+import { assertSameOrigin } from "@/server/csrf";
 import { db } from "@/server/db";
 import {
   applyAdjustment,
@@ -34,6 +35,7 @@ const actionSchema = z.object({
  */
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
+    assertSameOrigin(request);
     const admin = await requireAdminUser(request);
     const { id } = await ctx.params;
     const parsed = actionSchema.safeParse(await request.json().catch(() => null));

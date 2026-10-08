@@ -44,7 +44,13 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
     const reason = parsed.data.note ?? "Cancelled by support";
     assertOrderTransition(order.status, "CANCELLED");
-    const markRefunded = order.payment_status === "PAID" || order.status !== "PENDING_PAYMENT";
+    // Only orders with a SUCCESS payment row can be marked REFUNDED — and
+    // only after Paystack confirms the money-out. Anything else cancels the
+    // order without touching payment_status.
+    const paidRows = await sql<{ id: string }[]>`
+      SELECT id FROM payments WHERE order_id = ${id} AND status = 'SUCCESS' LIMIT 1
+    `;
+    const refundable = paidRows.length > 0;
     const openDeliveries = await sql<{ delivery_id: string; rider_user_id: string | null }[]>`
       SELECT d.id AS delivery_id, dp.user_id AS rider_user_id
       FROM deliveries d
@@ -58,7 +64,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       const updated = await tx<{ id: string }[]>`
         UPDATE orders
         SET status = 'CANCELLED', dispatch_status = 'CANCELLED',
-            payment_status = ${markRefunded ? "REFUNDED" : order.payment_status},
             cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW()
         WHERE id = ${id} AND status = ${order.status}
         RETURNING id
@@ -78,12 +83,24 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
     await releaseCouponForOrder(id).catch(() => undefined);
     await restoreStockForOrder(id).catch(() => undefined);
-    await refundOrderPayment(id, reason);
+    let refunded = false;
+    if (refundable) {
+      const outcome = await refundOrderPayment(id, reason);
+      refunded = outcome.attempted && outcome.processed;
+      if (refunded) {
+        await sql`UPDATE orders SET payment_status = 'REFUNDED', updated_at = NOW() WHERE id = ${id} AND payment_status = 'PAID'`;
+      } else {
+        console.error("[admin/orders] refund not processed for force-cancelled order:", {
+          orderId: id,
+          detail: outcome.attempted ? outcome.detail : outcome.reason,
+        });
+      }
+    }
     await notifyUser({
       userId: order.user_id,
       type: "ORDER",
       title: `Order ${order.order_number} cancelled`,
-      body: `Support cancelled your order. ${markRefunded ? "Your payment will be refunded. If it does not arrive within a few days, contact support." : ""}${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""}`,
+      body: `Support cancelled your order. ${refunded ? "Your payment has been refunded." : refundable ? "Your payment will be refunded. If it does not arrive within a few days, contact support." : ""}${parsed.data.note ? ` Reason: ${parsed.data.note}` : ""}`,
       data: { orderId: id, status: "CANCELLED" },
     }).catch(() => undefined);
     if (openDelivery?.rider_user_id) {

@@ -113,7 +113,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
 
     if (parsed.data.action === "decline") {
       await sql`
-        UPDATE catering_requests SET status = 'DECLINED', updated_at = NOW() WHERE id = ${id}
+        UPDATE catering_requests SET status = 'DECLINED', updated_at = NOW() WHERE id = ${id} AND vendor_id = ${vendor.id}
       `;
       await notifyUser({
         userId: booking.user_id,
@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
           SET quote_amount = EXCLUDED.quote_amount, per_guest = EXCLUDED.per_guest,
               message = EXCLUDED.message, status = 'PENDING', responded_at = NOW()
       `;
-      await tx`UPDATE catering_requests SET status = 'QUOTED', updated_at = NOW() WHERE id = ${id}`;
+      await tx`UPDATE catering_requests SET status = 'QUOTED', updated_at = NOW() WHERE id = ${id} AND vendor_id = ${vendor.id}`;
     });
     await notifyUser({
       userId: booking.user_id,

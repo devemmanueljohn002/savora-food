@@ -7,19 +7,21 @@ import {
   type SessionUser,
 } from "@/server/auth/session";
 import {
-  createSession,
   findUserByRevokedRefreshHash,
   getSessionByRefreshHash,
   revokeAllSessionsForUser,
-  revokeSession,
+  rotateRefreshSession,
   type UserRow,
 } from "@/server/auth/store";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 import { getEnv } from "@/server/env";
 import { toPublicUser } from "@/server/auth/session-flow";
 
 export async function POST(request: import("next/server").NextRequest) {
   try {
+    const limit = limitByIp(request, "refresh", 30);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
     if (!refreshToken) {
       throw ApiError.unauthorized("Your session has expired. Please sign in again.");
@@ -39,16 +41,16 @@ export async function POST(request: import("next/server").NextRequest) {
 
     const env = getEnv();
     const newRefreshToken = generateOpaqueToken();
-    const newSession = await createSession({
+    const newSession = await rotateRefreshSession({
+      oldSessionId: session.session_id,
       userId: session.id,
       refreshTokenHash: hashToken(newRefreshToken),
       refreshTokenTtlDays: env.refreshTokenTtlDays,
       userAgent: request.headers.get("user-agent") ?? undefined,
       ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined,
     });
-    await revokeSession(session.session_id);
 
-    const sessionUser: SessionUser = { id: session.id, role: session.role, email: session.email };
+    const sessionUser: SessionUser = { id: session.id, role: session.role, email: session.email, tokenVersion: session.token_version ?? 0 };
     const response = NextResponse.json(
       ok(toPublicUser(session as unknown as UserRow), { rotated: true, sessionId: newSession.id }),
     );

@@ -27,8 +27,10 @@ export async function POST(request: Request) {
     if (!user) {
       throw ApiError.unauthorized("Invalid email/phone or password.");
     }
+    // Suspended accounts get the identical response: a distinct 403 would
+    // disclose which identifiers are suspended (account-status oracle).
     if (user.status !== "ACTIVE") {
-      throw ApiError.forbidden("This account has been suspended. Contact support.");
+      throw ApiError.unauthorized("Invalid email/phone or password.");
     }
 
     const valid = await verifyPassword(password, user.password_hash);

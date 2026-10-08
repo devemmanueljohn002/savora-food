@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { absoluteUrl } from "@/lib/site-url";
-import { AFFILIATE_COOKIE, recordClick } from "@/server/affiliates";
+import { AFFILIATE_COOKIE, getCommissionConfig, recordClick } from "@/server/affiliates";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 /** Link-preview crawlers (WhatsApp, X, Facebook…) that need OG tags. */
 const BOT_UA =
@@ -47,16 +48,21 @@ function previewHtml(code: string): string {
 }
 
 /**
- * Referral link landing: /ref/JOHN123. Logs the click, plants the 30-day
- * httpOnly attribution cookie (always overwritten → most recent click wins),
- * then sends the shopper to the public homepage. Never shows referrer data
- * and never logs anyone in. Unknown/inactive codes still redirect (no cookie)
- * so links never 404.
+ * Referral link landing: /ref/JOHN123. Logs the click, plants the httpOnly
+ * attribution cookie (lifetime = configured attribution window, always
+ * overwritten → most recent click wins), then sends the shopper to the
+ * public homepage. Never shows referrer data and never logs anyone in.
+ * Unknown/inactive codes still redirect (uniform cookie, no oracle) so
+ * links never 404.
  */
 export async function GET(request: NextRequest, ctx: { params: Promise<{ code: string }> }) {
   const { code } = await ctx.params;
   const clean = code.trim().toUpperCase();
   const home = new URL("/", request.url);
+
+  // Throttle code sweeping; crawlers/bots are served metadata below.
+  const limit = limitByIp(request, "ref", 60);
+  if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
 
   // Crawlers get metadata HTML (same OG/Twitter tags as the homepage) so
   // link previews render the image. No redirect, no click recorded, no cookie.
@@ -73,22 +79,31 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ code: s
 
   if (!clean) return response;
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip");
+    request.headers.get("x-real-ip")?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    null;
   const affiliate = await recordClick(
     clean,
     ip ?? null,
     request.headers.get("user-agent"),
   ).catch(() => undefined);
-  if (!affiliate) return response;
 
+  // Uniform response (no valid-code oracle): the cookie is always set to the
+  // cleaned code, valid or not. Only a DB-validated code is ever honored
+  // downstream (signup + checkout resolve the code against affiliates again
+  // and ignore anything else).
   // 30-day httpOnly referral cookie (last click wins — each visit overwrites).
-  response.cookies.set(AFFILIATE_COOKIE, affiliate.code, {
+  // Cookie lifetime follows the configured attribution window
+  // (affiliate_attribution_days, default 7, capped at 30): the knob in the
+  // admin payout settings is the real window, not just a label.
+  const config = await getCommissionConfig().catch(() => null);
+  const windowDays = Math.min(30, Math.max(1, config?.attributionDays ?? 7));
+  response.cookies.set(AFFILIATE_COOKIE, affiliate?.code ?? clean, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: windowDays * 24 * 60 * 60,
   });
   return response;
 }

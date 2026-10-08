@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext } from "@/server/vendors";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
+import { assertSameOrigin } from "@/server/csrf";
 import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
     const session = await requireVendor(request);
     const vendor = await getVendorContext(session.id);
     const throttle = checkRateLimit(`rl:withdraw:${session.id}`, 20);

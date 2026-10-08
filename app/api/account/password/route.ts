@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, okMessage, toEnvelope } from "@/server/errors";
 import { requireSession } from "@/server/auth/guard";
+import { assertSameOrigin } from "@/server/csrf";
 import { clearAuthCookies } from "@/server/auth/session";
 import { getUserById, revokeAllSessionsForUser, updatePassword } from "@/server/auth/store";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
@@ -16,6 +17,7 @@ const passwordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
     const session = await requireSession(request);
     const body = await request.json().catch(() => null);
     const parsed = passwordSchema.safeParse(body);

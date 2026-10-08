@@ -210,8 +210,11 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       const { releaseCouponForOrder } = await import("@/server/orders");
       await sql.begin(async (tx) => {
         // Guarded write: see accept above — concurrent reject/cancel loses.
+        // payment_status is deliberately NOT flipped to REFUNDED here: the
+        // ledger must only claim "refunded" after Paystack confirms the
+        // money-out below (processed:true flips it afterwards).
         const updated = await tx<{ id: string }[]>`
-          UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', payment_status = 'REFUNDED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW()
+          UPDATE orders SET status = 'CANCELLED', dispatch_status = 'CANCELLED', cancelled_at = NOW(), cancelled_reason = ${reason}, updated_at = NOW()
           WHERE id = ${id} AND status = ${order.status}
           RETURNING id
         `;
@@ -231,8 +234,19 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       const { restoreStockForOrder } = await import("@/server/orders");
       await restoreStockForOrder(id).catch(() => undefined);
       // Real money-out refund via Paystack (best-effort, recorded in ledger).
+      // REFUNDED is only written when Paystack confirms (processed:true) —
+      // a decline/outage leaves payment_status untouched and loudly logged
+      // so support never closes the ticket as "refunded" by mistake.
       const { refundOrderPayment } = await import("@/server/refunds");
       const refund = await refundOrderPayment(id, reason);
+      if (refund.attempted && refund.processed) {
+        await sql`UPDATE orders SET payment_status = 'REFUNDED', updated_at = NOW() WHERE id = ${id} AND payment_status = 'PAID'`;
+      } else if (refund.attempted && !refund.processed) {
+        console.error("[vendor/orders] refund not processed for cancelled order:", {
+          orderId: id,
+          detail: refund.detail,
+        });
+      }
       const refundLine =
         refund.attempted && refund.processed
           ? "Your payment has been refunded."

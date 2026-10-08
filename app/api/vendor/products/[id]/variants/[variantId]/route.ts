@@ -58,7 +58,7 @@ export async function PATCH(
         stock_quantity = COALESCE(${d.stockQuantity ?? null}, stock_quantity),
         is_active = COALESCE(${d.isActive ?? null}, is_active),
         updated_at = NOW()
-      WHERE id = ${variantId}
+      WHERE id = ${variantId} AND product_id = ${id}
       RETURNING id, name, price, stock_quantity, is_active
     `;
     const variant = rows[0];
@@ -87,7 +87,7 @@ export async function DELETE(
     const vendor = await getVendorContext(session.id);
     const { id, variantId } = await ctx.params;
     if (!(await vendorVariant(id, variantId, vendor.id))) throw ApiError.notFound("Variant not found.");
-    await db()`DELETE FROM product_variants WHERE id = ${variantId}`;
+    await db()`DELETE FROM product_variants WHERE id = ${variantId} AND product_id = ${id}`;
     return NextResponse.json(ok({ removed: true }));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);

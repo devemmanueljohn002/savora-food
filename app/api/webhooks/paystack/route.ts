@@ -119,8 +119,36 @@ async function handleTransferEvent(
     return NextResponse.json({ success: true, message: "Duplicate event ignored." });
   }
 
+  // Defense in depth: the signed event alone moves money state, so reconcile
+  // it against Paystack's live transfer status. A forged or stale event that
+  // disagrees with Paystack loses; an unreachable verify API falls back to
+  // the signed event (availability over strictness, alerting via warn log).
+  let effectiveEvent = event;
+  try {
+    const { verifyTransfer } = await import("@/server/payments/transfers");
+    const live = await verifyTransfer(fields.reference);
+    const liveEvent =
+      live.status === "success"
+        ? "transfer.success"
+        : live.status === "failed"
+          ? "transfer.failed"
+          : live.status === "reversed" || live.status === "returned"
+            ? "transfer.reversed"
+            : null;
+    if (liveEvent && liveEvent !== event) {
+      console.warn("[webhooks] transfer event disagrees with Paystack; trusting live status.", {
+        reference: fields.reference,
+        event,
+        liveStatus: live.status,
+      });
+      effectiveEvent = liveEvent;
+    }
+  } catch {
+    // verify API unreachable — fall back to the signed event below.
+  }
+
   const withdrawal = await applyTransferWebhook({
-    event,
+    event: effectiveEvent,
     reference: fields.reference,
     transferCode: fields.transferCode,
     paystackStatus: fields.paystackStatus,

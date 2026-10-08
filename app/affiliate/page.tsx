@@ -5,8 +5,10 @@ import { getAffiliateByUserId } from "@/server/affiliates";
 import AffiliateDashboard from "./AffiliateDashboard";
 
 /**
- * Server guard: only affiliates may see the dashboard. Everyone else —
- * signed out or simply not joined — goes to the "Become an affiliate" page.
+ * Server guard: only ACTIVE affiliates may see the dashboard. Everyone else —
+ * signed out, never joined, suspended or banned — goes to the "Become an
+ * affiliate" page (APIs enforce ACTIVE independently, so this is the
+ * consistent front door, not the data boundary).
  */
 export default async function AffiliatePage() {
   const store = await cookies();
@@ -20,7 +22,7 @@ export default async function AffiliatePage() {
     redirect("/affiliate/register");
   }
   const affiliate = userId ? await getAffiliateByUserId(userId).catch(() => undefined) : undefined;
-  if (!affiliate) redirect("/affiliate/register");
+  if (!affiliate || affiliate.status !== "ACTIVE") redirect("/affiliate/register");
 
   return <AffiliateDashboard />;
 }

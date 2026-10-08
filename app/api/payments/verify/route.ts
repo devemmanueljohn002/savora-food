@@ -51,19 +51,9 @@ export async function GET(request: NextRequest) {
       );
     }
     // Order progressed past PAID but this reference was never marked SUCCESS
-    // (e.g. webhook won with this same reference): still success — the money
-    // is already captured for this order.
-    if (PAID_PROGRESSION.has(order.status)) {
-      return NextResponse.json(
-        ok({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          status: order.status,
-          paid: true,
-          reference,
-        }),
-      );
-    }
+    // (e.g. webhook won with a different reference): do NOT attest paid for
+    // a reference that did not pay. Fall through to server-side verification
+    // of the supplied reference below.
 
     // Never trust the client's redirect alone: confirm server-side with
     // Paystack's verify API and require an exact match on status + reference

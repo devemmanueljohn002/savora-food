@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, okMessage, toEnvelope } from "@/server/errors";
 import { consumeEmailVerificationToken, markEmailVerified } from "@/server/auth/store";
 import { hashToken } from "@/server/auth/tokens";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 const verifySchema = z.object({
   token: z.string().min(1, "Verification token is required"),
@@ -10,6 +11,8 @@ const verifySchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const limit = limitByIp(request, "verify-email", 30);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = verifySchema.safeParse(body);
     if (!parsed.success) {

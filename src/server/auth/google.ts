@@ -35,6 +35,9 @@ export function sanitizeNext(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return null;
+  // Backslash and control-char variants that some parsers treat as authorities.
+  if (trimmed.includes("\\")) return null;
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) return null;
   return trimmed;
 }
 

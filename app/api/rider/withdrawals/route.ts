@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { ROLES, requireRole } from "@/server/auth/guard";
 import { getRiderContext } from "@/server/riders";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
+import { assertSameOrigin } from "@/server/csrf";
 import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
 /** Rider withdrawal request — the shared payout service, not a rider copy. */
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
     const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
     const rider = await getRiderContext(session.id);
     const throttle = checkRateLimit(`rl:withdraw:${session.id}`, 20);

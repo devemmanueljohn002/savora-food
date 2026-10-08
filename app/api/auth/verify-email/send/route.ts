@@ -5,11 +5,14 @@ import { getEnv } from "@/server/env";
 import { sendVerificationEmail } from "@/server/email";
 import { createEmailVerificationToken, getUserByEmail } from "@/server/auth/store";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 const resendSchema = z.object({ email: z.email("Enter a valid email address") });
 
 export async function POST(request: Request) {
   try {
+    const limit = limitByIp(request, "verify-email-send", 5);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = resendSchema.safeParse(body);
     if (!parsed.success) {

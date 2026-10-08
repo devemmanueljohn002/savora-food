@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireSession } from "@/server/auth/guard";
 import { requireAffiliate } from "@/server/affiliates";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
+import { assertSameOrigin } from "@/server/csrf";
 import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
 /** Affiliate withdrawal — the same shared payout service as vendors/riders. */
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
     const session = await requireSession(request);
     const affiliate = await requireAffiliate(session.id);
     const throttle = checkRateLimit(`rl:withdraw:${session.id}`, 20);

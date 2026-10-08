@@ -149,7 +149,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     if (["BOOKED", "CANCELLED"].includes(booking.status)) {
       throw ApiError.conflict("This booking can no longer be cancelled here. Please contact the vendor.");
     }
-    await sql`UPDATE catering_requests SET status = 'CANCELLED', updated_at = NOW() WHERE id = ${id}`;
+    await sql`UPDATE catering_requests SET status = 'CANCELLED', updated_at = NOW() WHERE id = ${id} AND user_id = ${user.id}`;
     return NextResponse.json(ok({ status: "CANCELLED" }));
   } catch (error) {
     const { envelope, status } = toEnvelope(error);

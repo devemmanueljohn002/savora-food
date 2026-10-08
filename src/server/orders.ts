@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, timingSafeEqual } from "crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { db } from "./db";
 import { ApiError } from "./errors";
 import { notifyUser } from "./vendors";
@@ -363,9 +363,11 @@ export const DELIVERY_CODE_TTL_HOURS = 4;
 export async function issueDeliveryCode(orderId: string): Promise<string | null> {
   const enabled = await getOtpEnabled().catch(() => true);
   const code = enabled ? generateDeliveryOtp() : null;
+  const salt = code ? newDeliveryCodeSalt() : null;
   await db()`
     UPDATE orders
-    SET delivery_otp = NULL, delivery_code_hash = ${code ? hashDeliveryCode(code) : null},
+    SET delivery_otp = NULL, delivery_code_hash = ${code && salt ? hashDeliveryCodeSalted(code, salt) : null},
+        delivery_code_salt = ${salt},
         delivery_code_expires_at = CASE WHEN ${code !== null} THEN NOW() + make_interval(hours => ${DELIVERY_CODE_TTL_HOURS}) ELSE NULL END,
         require_otp = ${enabled}, updated_at = NOW()
     WHERE id = ${orderId}
@@ -379,8 +381,8 @@ export async function issueDeliveryCode(orderId: string): Promise<string | null>
 
 /** Single hashing implementation lives in dispatch.ts; imported here so
  *  verifiers target one digest format (re-exported for consumers). */
-import { hashDeliveryCode } from "./dispatch";
-export { hashDeliveryCode };
+import { hashDeliveryCode, hashDeliveryCodeSalted, newDeliveryCodeSalt } from "./dispatch";
+export { hashDeliveryCode, hashDeliveryCodeSalted, newDeliveryCodeSalt };
 
 /**
  * Dual-read verifier for the hashing transition: hashed codes (issued after
@@ -392,9 +394,21 @@ export function verifyDeliveryCode(
   supplied: string | null,
   hash: string | null,
   legacyPlaintext: string | null,
+  salt?: string | null,
 ): boolean {
   if (!supplied || !supplied.trim()) return false;
   const attempt = supplied.trim();
+  // Salted rows first (new codes); legacy unsalted rows during transition.
+  if (salt && hash?.startsWith("v1$")) {
+    const parts = hash.split("$");
+    if (parts.length === 3 && parts[1] === salt) {
+      const a = Buffer.from(createHash("sha256").update(salt + attempt).digest("hex"));
+      const b = Buffer.from(parts[2]);
+      if (a.length !== b.length) return false;
+      return timingSafeEqual(a, b);
+    }
+    return false;
+  }
   if (hash) {
     const a = Buffer.from(hashDeliveryCode(attempt));
     const b = Buffer.from(hash);
@@ -709,6 +723,19 @@ export async function createOrdersFromCart(
   const cart = await getCartView(userId);
   if (cart.items.length === 0) {
     throw ApiError.validation("Your cart is empty.");
+  }
+
+  // Abuse cap: each unpaid checkout holds stock (and possibly a coupon
+  // redemption) for up to 24h. Bounding open PENDING_PAYMENT orders per user
+  // bounds the drain one account can cause, coupon or not.
+  const openOrders = await sql<{ count: string }[]>`
+    SELECT COUNT(*)::text AS count FROM orders
+    WHERE user_id = ${userId} AND status = 'PENDING_PAYMENT'
+  `;
+  if (Number(openOrders[0]?.count ?? 0) >= 10) {
+    throw ApiError.conflict(
+      "You have too many unpaid orders. Complete or wait for payment on an open order before checking out again.",
+    );
   }
 
   const addressRows = await sql<AddressRow[]>`

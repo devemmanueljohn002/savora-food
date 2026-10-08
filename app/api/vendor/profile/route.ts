@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
+import { storedImageUrl } from "@/lib/safe-url";
 import { getVendorByUserId, updateVendorProfile } from "@/server/auth/store";
 import { db } from "@/server/db";
 
@@ -13,8 +14,8 @@ const profileSchema = z.object({
   address: z.string().trim().max(500).optional().nullable(),
   city: z.string().trim().max(100).optional().nullable(),
   state: z.string().trim().max(100).optional().nullable(),
-  logoUrl: z.string().trim().max(500).optional().nullable(),
-  bannerImageUrl: z.string().trim().max(500).optional().nullable(),
+  logoUrl: storedImageUrl("Enter a valid logo URL."),
+  bannerImageUrl: storedImageUrl("Enter a valid banner URL."),
   bankName: z.string().trim().max(150).optional().nullable(),
   bankAccountName: z.string().trim().max(150).optional().nullable(),
   bankAccountNumber: z.string().trim().max(50).optional().nullable(),
