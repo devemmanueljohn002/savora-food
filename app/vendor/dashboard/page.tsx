@@ -152,6 +152,9 @@ export default function VendorDashboardPage() {
         overview={withdrawals.data ?? null}
         account={recipient.data ?? null}
         banks={banks.data ?? null}
+        banksLoading={banks.isLoading}
+        banksError={banks.isError ? (banks.error instanceof Error ? banks.error.message : "Could not load banks.") : null}
+        onRetryBanks={() => void banks.refetch()}
         availableKobo={withdrawals.data?.availableKobo ?? 0}
         pendingKobo={withdrawals.data?.pendingKobo ?? 0}
         subject="vendor"

@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
-import { ROLES, requireRole } from "@/server/auth/guard";
+import { requireSession } from "@/server/auth/guard";
 import { resolveAccount } from "@/server/payments/transfers";
 
 /** Verify that an account number belongs to someone at the given bank. Read-only,
- *  shared by vendor and rider payout forms. */
+ *  shared by affiliate signup and vendor/rider payout forms. Any signed-in user
+ *  may call it (affiliate verification happens before any role is granted). */
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(request, [ROLES.VENDOR, ROLES.DELIVERY_PARTNER, ROLES.ADMIN, ROLES.SUPER_ADMIN]);
+    await requireSession(request);
     const url = new URL(request.url);
     const accountNumber = url.searchParams.get("account_number")?.trim() ?? "";
     const bankCode = url.searchParams.get("bank_code")?.trim() ?? "";

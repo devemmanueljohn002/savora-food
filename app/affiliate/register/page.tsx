@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageShell from "@/components/PageShell";
+import BankCombobox from "@/components/BankCombobox";
 import { usePayoutBanks, useRegisterAffiliate } from "@/lib/api/hooks";
 import { resolvePayoutBankAccount } from "@/lib/savora-api";
 
@@ -19,6 +20,18 @@ export default function AffiliateRegisterPage() {
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const canVerify = bankCode !== "" && /^\d{10}$/.test(accountNumber) && !resolving;
+
+  function handleBankChange(code: string) {
+    setBankCode(code);
+    setResolvedName(null);
+  }
+
+  function handleAccountNumberChange(digits: string) {
+    setAccountNumber(digits.replace(/\D/g, "").slice(0, 10));
+    setResolvedName(null);
+  }
 
   async function verify() {
     setError("");
@@ -92,30 +105,38 @@ export default function AffiliateRegisterPage() {
           <p className="muted">Verified via Paystack before saving — one account per affiliate.</p>
           <label>
             Bank
-            <select value={bankCode} onChange={(event) => setBankCode(event.target.value)} required>
-              <option value="">Select bank…</option>
-              {(banks.data ?? []).map((bank) => (
-                <option key={bank.code} value={bank.code}>
-                  {bank.name}
-                </option>
-              ))}
-            </select>
+            <BankCombobox
+              id="affiliate-bank"
+              banks={banks.data ?? null}
+              loading={banks.isLoading}
+              error={banks.isError ? (banks.error instanceof Error ? banks.error.message : "Could not load banks.") : null}
+              onRetry={() => void banks.refetch()}
+              value={bankCode}
+              onChange={handleBankChange}
+            />
           </label>
           <label>
             Account number
             <input
               value={accountNumber}
               inputMode="numeric"
+              pattern="[0-9]*"
               maxLength={10}
               placeholder="10-digit account number"
-              onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, ""))}
+              onChange={(event) => handleAccountNumberChange(event.target.value)}
               required
             />
           </label>
-          <button type="button" className="btn secondary" onClick={verify} disabled={resolving}>
+          <button type="button" className="btn secondary" onClick={verify} disabled={!canVerify}>
             {resolving ? "Verifying…" : "Verify account"}
           </button>
-          {resolvedName ? <p className="auth-success">Account name: {resolvedName}</p> : null}
+          {resolvedName ? (
+            <div className="confirm-box" role="status" style={{ marginTop: 12 }}>
+              <span>
+                Account verified: <strong>{resolvedName}</strong>
+              </span>
+            </div>
+          ) : null}
           {error ? (
             <p className="auth-error" role="alert">
               {error}
@@ -126,7 +147,7 @@ export default function AffiliateRegisterPage() {
               {message}
             </p>
           ) : null}
-          <button className="btn" disabled={register.isPending}>
+          <button className="btn" disabled={register.isPending || !resolvedName}>
             {register.isPending ? "Joining…" : "Join as affiliate"}
           </button>
         </form>

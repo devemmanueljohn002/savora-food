@@ -152,7 +152,7 @@ export type PaystackBank = {
 };
 
 export async function listBanks(fetchImpl?: FetchImpl): Promise<PaystackBank[]> {
-  const data = await paystackRequest<PaystackBank[]>("/bank?currency=NGN", { fetchImpl });
+  const data = await paystackRequest<PaystackBank[]>("/bank?country=nigeria&perPage=100", { fetchImpl });
   return Array.isArray(data) ? data : [];
 }
 

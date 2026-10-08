@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { CircleCheck, Info, Wallet } from "lucide-react";
 import { formatNaira } from "@/components/VendorShell";
+import BankCombobox from "@/components/BankCombobox";
 import type { PayoutOverview, PayoutRecipient, PayoutWithdrawal, PaystackBankOption } from "@/lib/savora-api";
 
 /**
@@ -22,6 +23,9 @@ export type PayoutPanelProps = {
   overview?: PayoutOverview | null;
   account?: PayoutRecipient | null;
   banks?: PaystackBankOption[] | null;
+  banksLoading?: boolean;
+  banksError?: string | null;
+  onRetryBanks?: () => void;
   /** Used when the overview query has not resolved yet. */
   availableKobo: number;
   pendingKobo: number;
@@ -87,6 +91,20 @@ export default function PayoutPanel(props: PayoutPanelProps) {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formNote, setFormNote] = useState<string | null>(null);
+
+  const canVerify = bankCode !== "" && /^\d{10}$/.test(accountNumber) && !resolving;
+
+  function handleBankChange(code: string) {
+    setBankCode(code);
+    setResolvedName(null);
+    setResolveError(null);
+  }
+
+  function handleAccountNumberChange(raw: string) {
+    setAccountNumber(raw.replace(/\D/g, "").slice(0, 10));
+    setResolvedName(null);
+    setResolveError(null);
+  }
 
   // One key per submit attempt, minted in the click handler (not render), so a
   // double-click reuses it and the server treats the 2nd POST as a duplicate.
@@ -283,19 +301,15 @@ export default function PayoutPanel(props: PayoutPanelProps) {
           <label className="field-label" htmlFor="payout-bank">
             Bank
           </label>
-          <select
+          <BankCombobox
             id="payout-bank"
-            className="input"
+            banks={banks}
+            loading={props.banksLoading ?? false}
+            error={props.banksError ?? null}
+            onRetry={props.onRetryBanks}
             value={bankCode}
-            onChange={(event) => setBankCode(event.target.value)}
-          >
-            <option value="">Select bank…</option>
-            {(banks ?? []).map((bank) => (
-              <option key={bank.code} value={bank.code}>
-                {bank.name}
-              </option>
-            ))}
-          </select>
+            onChange={handleBankChange}
+          />
         </div>
 
         <div className="payout-field">
@@ -307,14 +321,15 @@ export default function PayoutPanel(props: PayoutPanelProps) {
             className="input"
             value={accountNumber}
             inputMode="numeric"
+            pattern="[0-9]*"
             maxLength={10}
             placeholder="10-digit account number"
-            onChange={(event) => setAccountNumber(event.target.value.replace(/\D/g, ""))}
+            onChange={(event) => handleAccountNumberChange(event.target.value)}
           />
         </div>
 
         <div className="payout-actions">
-          <button className="btn btn-secondary" type="button" onClick={handleResolve} disabled={resolving}>
+          <button className="btn btn-secondary" type="button" onClick={handleResolve} disabled={!canVerify}>
             {resolving ? "Verifying…" : "Verify account"}
           </button>
           <button

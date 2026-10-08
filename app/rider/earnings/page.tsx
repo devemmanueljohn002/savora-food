@@ -115,6 +115,9 @@ export default function RiderEarningsPage() {
             overview={payouts.data ?? null}
             account={recipient.data ?? null}
             banks={banks.data ?? null}
+            banksLoading={banks.isLoading}
+            banksError={banks.isError ? (banks.error instanceof Error ? banks.error.message : "Could not load banks.") : null}
+            onRetryBanks={() => void banks.refetch()}
             availableKobo={payouts.data?.availableKobo ?? 0}
             pendingKobo={payouts.data?.pendingKobo ?? 0}
             saving={saveRecipient.isPending}

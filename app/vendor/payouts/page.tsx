@@ -76,6 +76,9 @@ export default function VendorPayoutsPage() {
             overview={wallet ?? null}
             account={recipient.data ?? null}
             banks={banks.data ?? null}
+            banksLoading={banks.isLoading}
+            banksError={banks.isError ? (banks.error instanceof Error ? banks.error.message : "Could not load banks.") : null}
+            onRetryBanks={() => void banks.refetch()}
             availableKobo={availableKobo}
             pendingKobo={pendingKobo}
             saving={saveRecipient.isPending}

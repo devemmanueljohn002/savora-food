@@ -163,6 +163,9 @@ export default function AffiliateDashboardPage() {
           overview={wallet ?? null}
           account={recipient.data ?? null}
           banks={banks.data ?? null}
+          banksLoading={banks.isLoading}
+          banksError={banks.isError ? (banks.error instanceof Error ? banks.error.message : "Could not load banks.") : null}
+          onRetryBanks={() => void banks.refetch()}
           availableKobo={wallet?.availableKobo ?? data.wallet.availableKobo}
           pendingKobo={wallet?.pendingKobo ?? data.wallet.pendingKobo}
           saving={saveRecipient.isPending}
