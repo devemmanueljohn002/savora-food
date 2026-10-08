@@ -470,6 +470,58 @@ export async function getAffiliateStats(affiliateId: string): Promise<AffiliateS
   };
 }
 
+export type ReferredCustomer = {
+  firstName: string;
+  /** Masked for privacy (e.g. j***@gmail.com). */
+  emailMasked: string;
+  orders: number;
+  commissionKobo: number;
+  commission: number;
+  lastOrderAt: string | null;
+};
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const head = (local ?? "").slice(0, 1) || "*";
+  return `${head}***@${domain}`;
+}
+
+/** Real data only: distinct customers behind non-reversed commissions. */
+export async function listReferredCustomers(affiliateId: string, limit = 50): Promise<ReferredCustomer[]> {
+  const sql = db();
+  const rows = await sql<{
+    first_name: string;
+    email: string;
+    orders: string;
+    commission_kobo: string;
+    last_order_at: Date | null;
+  }[]>`
+    SELECT u.first_name, u.email,
+           COUNT(c.id)::text AS orders,
+           COALESCE(SUM(c.amount_kobo), 0)::text AS commission_kobo,
+           MAX(o.created_at) AS last_order_at
+    FROM affiliate_commissions c
+    JOIN orders o ON o.id = c.order_id
+    JOIN users u ON u.id = o.user_id
+    WHERE c.affiliate_id = ${affiliateId} AND c.status <> 'REVERSED'
+    GROUP BY u.id, u.first_name, u.email
+    ORDER BY MAX(o.created_at) DESC
+    LIMIT ${limit}
+  `;
+  return rows.map((row) => {
+    const commissionKobo = Number(row.commission_kobo ?? 0);
+    return {
+      firstName: row.first_name || "Customer",
+      emailMasked: maskEmail(row.email ?? ""),
+      orders: Number(row.orders ?? 0),
+      commissionKobo,
+      commission: commissionKobo / 100,
+      lastOrderAt: row.last_order_at ? new Date(row.last_order_at).toISOString() : null,
+    };
+  });
+}
+
 /** Admin row: one affiliate with referrals, sales generated, total paid. */
 export async function listAffiliatesAdmin(): Promise<
   Array<{

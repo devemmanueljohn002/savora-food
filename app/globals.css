@@ -18,6 +18,10 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 .auth{max-width:440px;margin:55px auto}.tabs{display:flex;background:#f1ede7;border-radius:12px;padding:4px;margin-bottom:18px}.tabs span{flex:1;text-align:center;padding:10px;border-radius:9px}.tabs .selected{background:white;box-shadow:0 2px 8px #0001}
 .tabs button{flex:1;border:0;background:transparent;text-align:center;padding:10px;border-radius:9px;font:inherit;color:var(--muted);cursor:pointer}
 .tabs button.selected{background:white;color:var(--ink);box-shadow:0 2px 8px #0001;font-weight:700}
+.tabs a{flex:1;border:0;background:transparent;text-align:center;padding:10px;border-radius:9px;font:inherit;color:var(--muted);cursor:pointer}
+.tabs a.selected{background:white;color:var(--ink);box-shadow:0 2px 8px #0001;font-weight:700}
+/* Customer | Affiliate switcher (account/dashboard area, affiliates only) */
+.account-type-switcher{width:100%;max-width:448px;margin:0 auto 18px}
 .product{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:42px 0}.product-image{width:100%;border-radius:24px}.quantity{display:flex;gap:14px;align-items:center;border:1px solid var(--line);padding:10px 14px;border-radius:12px;width:max-content}
 .cart-grid{display:grid;grid-template-columns:2fr .85fr;gap:32px;padding:40px 0}.cart-item{display:flex;gap:18px;padding:16px}.cart-item img{width:110px;height:90px;object-fit:cover;border-radius:14px}.summary{padding:24px;height:max-content}
 .footer{margin-top:60px;background:linear-gradient(90deg,#fffaf0,#fff4df);border-top:1px solid var(--line);padding:38px 0 16px}.footer-grid{display:grid;grid-template-columns:1.3fr 1fr 1.2fr 1.2fr;gap:30px}.footer h4{margin-top:0}.footer a{display:block;color:var(--muted);margin:10px 0}.copyright{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}

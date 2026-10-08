@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
       getPayoutOverview({ type: "AFFILIATE", id: affiliate.id }),
       getCommissionConfig(),
     ]);
+    const paidKobo = wallet.withdrawals
+      .filter((withdrawal) => withdrawal.status === "SUCCESS")
+      .reduce((sum, withdrawal) => sum + withdrawal.amountKobo, 0);
     return NextResponse.json(
       ok({
         affiliate: {
@@ -37,6 +40,8 @@ export async function GET(request: NextRequest) {
           available: wallet.available,
           pendingKobo: wallet.pendingKobo,
           pending: wallet.pending,
+          paidKobo,
+          paid: koboToNaira(paidKobo),
         },
         commission: {
           mode: config.mode,

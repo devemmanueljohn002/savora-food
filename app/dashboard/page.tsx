@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Heart, LogIn, Package, Receipt, UtensilsCrossed, Wallet } from "lucide-react";
 import PageShell from "@/components/PageShell";
+import AccountTypeSwitcher from "@/components/AccountTypeSwitcher";
 import RoleGuard from "@/components/RoleGuard";
 import SignOutButton from "@/components/SignOutButton";
 import {
   useAccount,
+  useAffiliateProfile,
   useCancelOrder,
   useCateringRequests,
   useConsumerOverview,
@@ -600,6 +602,7 @@ function DashboardBody() {
   const initial: Tab = TABS.includes(requested as Tab) ? (requested as Tab) : "overview";
   const [tab, setTab] = useState<Tab>(initial);
   const account = useAccount();
+  const affiliateProfile = useAffiliateProfile();
 
   if (account.isLoading) {
     return (
@@ -617,6 +620,19 @@ function DashboardBody() {
   return (
     <PageShell>
       <section className="section container">
+        {affiliateProfile.data ? (
+          <AccountTypeSwitcher isAffiliate />
+        ) : (
+          <div className="card card-body" style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Become an affiliate</h3>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              Share your referral link and earn commission on every qualifying order.
+            </p>
+            <Link className="btn secondary btn-sm" href="/affiliate/register">
+              Become an affiliate
+            </Link>
+          </div>
+        )}
         <div className="dash-head">
           <div>
             <h1>Welcome, {name}</h1>

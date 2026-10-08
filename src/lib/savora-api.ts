@@ -1599,9 +1599,30 @@ export type AffiliateOverview = {
     earnings: number;
     conversionRate: number;
   };
-  wallet: { name: string; availableKobo: number; available: number; pendingKobo: number; pending: number };
+  wallet: {
+    name: string;
+    availableKobo: number;
+    available: number;
+    pendingKobo: number;
+    pending: number;
+    paidKobo: number;
+    paid: number;
+  };
   commission: { mode: "PERCENT" | "FLAT"; pct: number; flat: number; flatKobo: number; baseRule: string };
 };
+
+export type ReferredCustomer = {
+  firstName: string;
+  emailMasked: string;
+  orders: number;
+  commissionKobo: number;
+  commission: number;
+  lastOrderAt: string | null;
+};
+
+export function getAffiliateCustomers() {
+  return apiGet<ReferredCustomer[]>("/affiliate/customers").then((result) => result.data);
+}
 
 export function getAffiliateProfile() {
   return apiGet<AffiliateProfile>("/affiliate/register").then((result) => result.data);

@@ -30,6 +30,7 @@ import {
   getAccount,
   getAdminPayoutSettings,
   getAffiliateLeaderboard,
+  getAffiliateCustomers,
   getAffiliateOverview,
   getAffiliateProfile,
   getAffiliateRecipient,
@@ -1566,7 +1567,17 @@ export const affiliateKeys = {
   overview: ["affiliate-overview"] as const,
   withdrawals: ["affiliate-withdrawals"] as const,
   recipient: ["affiliate-recipient"] as const,
+  customers: ["affiliate-customers"] as const,
 };
+
+export function useAffiliateCustomers() {
+  return useQuery({
+    queryKey: affiliateKeys.customers,
+    queryFn: getAffiliateCustomers,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
 
 export function useAffiliateProfile() {
   return useQuery({
