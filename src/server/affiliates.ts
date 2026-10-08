@@ -21,9 +21,10 @@ import type { Owner } from "./wallet";
  *   codes/cookies are ignored. 30-day referral cookie (last click wins).
  * - One commission per order (UNIQUE order_id + ON CONFLICT DO NOTHING).
  * - Commission is created only when the order reaches DELIVERED (delivery
- *   verified) — never at signup or order placement — and is immediately
- *   RELEASED into the affiliate's available balance. Cancel/refund/
- *   chargeback inserts an offsetting adjustment and marks REVERSED.
+ *   verified) — never at signup or order placement — as a PENDING ledger
+ *   hold maturing via releaseAffiliateHolds (affiliate_hold_days grace).
+ *   Cancel/refund/chargeback inserts an offsetting adjustment and marks
+ *   REVERSED.
  * - Self-referral blocked by user id AND phone number at signup/checkout,
  *   plus shared device (login IP + user agent) and shared payout account
  *   at commission time.
@@ -303,10 +304,24 @@ export async function registerAffiliate(
 export async function recordClick(code: string, ip: string | null, userAgent: string | null): Promise<AffiliateRow | undefined> {
   const affiliate = await getAffiliateByCode(code);
   if (!affiliate || affiliate.status !== "ACTIVE") return undefined;
-  await db()`
-    INSERT INTO affiliate_clicks (affiliate_id, code, ip_address, user_agent)
-    VALUES (${affiliate.id}, ${affiliate.code}, ${ip}, ${userAgent})
-  `.catch(() => undefined);
+  const sql = db();
+  // Click-fraud throttle: one counted click per affiliate + IP per hour.
+  // Repeat hits still refresh the attribution cookie (route-level) but do
+  // not inflate clicks or grow the table.
+  const recent = ip
+    ? await sql<{ found: string }[]>`
+        SELECT 1 AS found FROM affiliate_clicks
+        WHERE affiliate_id = ${affiliate.id} AND ip_address = ${ip}
+          AND created_at > NOW() - make_interval(hours => 1)
+        LIMIT 1
+      `.catch(() => [])
+    : [];
+  if (recent.length === 0) {
+    await sql`
+      INSERT INTO affiliate_clicks (affiliate_id, code, ip_address, user_agent)
+      VALUES (${affiliate.id}, ${affiliate.code}, ${ip}, ${userAgent})
+    `.catch(() => undefined);
+  }
   return affiliate;
 }
 
@@ -389,11 +404,14 @@ async function hasSharedDeviceOrPayout(input: {
 }
 
 /**
- * Create the RELEASED commission (available balance) once the order reaches
+ * Create the PENDING commission (ledger hold) once the order reaches
  * DELIVERED (delivery verified). Never runs at signup or order placement:
- * non-delivered orders return null without writing anything. Idempotent:
- * UNIQUE(order_id) + ON CONFLICT DO NOTHING. Best-effort: callers must
- * never fail delivery confirmation on ledger errors.
+ * non-delivered orders return null without writing anything. Holds mature
+ * into available balance via releaseAffiliateHolds() honoring the
+ * affiliate_hold_days grace period (default 0 = releasable on the first
+ * balance read after delivery). Idempotent: UNIQUE(order_id) +
+ * ON CONFLICT DO NOTHING. Best-effort: callers must never fail delivery
+ * confirmation on ledger errors.
  */
 export async function confirmAffiliateCommission(orderId: string): Promise<CommissionRow | null> {
   const sql = db();
@@ -449,11 +467,10 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
   try {
     return await sql.begin(async (tx) => {
       const inserted = await tx<CommissionRow[]>`
-        INSERT INTO affiliate_commissions (affiliate_id, order_id, base_kobo, amount_kobo, mode, rate_snapshot, status, released_at)
+        INSERT INTO affiliate_commissions (affiliate_id, order_id, base_kobo, amount_kobo, mode, rate_snapshot)
         VALUES (
           ${affiliate.id}, ${orderId}, ${baseKobo}, ${amountKobo}, ${config.mode},
-          ${tx.json({ pct: config.pct, flatKobo: config.flatKobo, excludesDeliveryFee: config.excludesDeliveryFee, subtractsDiscount: config.subtractsDiscount })},
-          'RELEASED', NOW()
+          ${tx.json({ pct: config.pct, flatKobo: config.flatKobo, excludesDeliveryFee: config.excludesDeliveryFee, subtractsDiscount: config.subtractsDiscount })}
         )
         ON CONFLICT (order_id) DO NOTHING
         RETURNING *
@@ -469,21 +486,21 @@ export async function confirmAffiliateCommission(orderId: string): Promise<Commi
           VALUES (${owner.type}, ${owner.id}, 0, 0)
           ON CONFLICT (owner_type, owner_id) DO NOTHING
         `;
-        const wallets = await tx<{ available_kobo: string }[]>`
-          SELECT available_kobo::text AS available_kobo FROM wallets
+        const wallets = await tx<{ pending_kobo: string }[]>`
+          SELECT pending_kobo::text AS pending_kobo FROM wallets
           WHERE owner_type = ${owner.type} AND owner_id = ${owner.id} FOR UPDATE
         `;
-        const available = Number(wallets[0]?.available_kobo ?? 0) + amountKobo;
+        const pending = Number(wallets[0]?.pending_kobo ?? 0) + amountKobo;
         await tx`
-          UPDATE wallets SET available_kobo = ${available}, updated_at = NOW()
+          UPDATE wallets SET pending_kobo = ${pending}, updated_at = NOW()
           WHERE owner_type = ${owner.type} AND owner_id = ${owner.id}
         `;
         await tx`
           INSERT INTO wallet_entries
             (owner_type, owner_id, kind, amount_kobo, balance_after_kobo, order_id, meta)
           VALUES (
-            ${owner.type}, ${owner.id}, 'release', ${amountKobo}, ${available}, ${orderId},
-            ${tx.json({ commissionId: inserted[0].id, baseKobo, releasedAtDelivery: true })}
+            ${owner.type}, ${owner.id}, 'hold', ${amountKobo}, ${pending}, ${orderId},
+            ${tx.json({ commissionId: inserted[0].id, baseKobo })}
           )
           ON CONFLICT DO NOTHING
         `;

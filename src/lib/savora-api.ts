@@ -221,7 +221,7 @@ export function login(input: { email?: string; identifier?: string; password: st
 }
 
 export function register(input: { firstName: string; lastName: string; email: string; phone?: string; password: string; role?: string }) {
-  return apiSend<AuthUser>("/auth/register", "POST", input).then((result) => result.data);
+  return apiSend<AuthUser & { existingAccount?: boolean }>("/auth/register", "POST", input).then((result) => result.data);
 }
 
 export function logout() {
@@ -2041,8 +2041,10 @@ export type OrderTracking = {
   history: { status: string; note: string | null; createdAt: string }[];
 };
 
-export function trackOrderByNumber(number: string) {
-  return apiGet<OrderTracking>(`/orders/track${queryString({ number })}`).then((result) => result.data);
+export function trackOrderByNumber(number: string, contact?: { email?: string; phone?: string }) {
+  return apiGet<OrderTracking>(
+    `/orders/track${queryString({ number, email: contact?.email ?? undefined, phone: contact?.phone ?? undefined })}`,
+  ).then((result) => result.data);
 }
 
 export function createCheckoutOrders(input: { addressId: string; deliveryInstructions?: string; couponCode?: string; referralCode?: string }) {

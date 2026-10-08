@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireCustomer } from "@/server/auth/guard";
 import { createOrdersFromCart, expireStalePendingPayments } from "@/server/orders";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import { AFFILIATE_COOKIE, attachAffiliateToOrders, getReferredAffiliate, normalizeReferralCode, resolveAttributionCode, resolveCheckoutReferrer } from "@/server/affiliates";
 
 const bodySchema = z.object({
@@ -16,6 +17,8 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const user = await requireCustomer(request);
+    const throttle = checkRateLimit(`rl:checkout:${user.id}`, 30);
+    if (!throttle.ok) return rateLimitedResponse(throttle.retryAfter);
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       throw ApiError.validation("Invalid checkout request.", parsed.error.flatten().fieldErrors);

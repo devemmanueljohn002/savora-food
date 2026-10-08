@@ -66,7 +66,13 @@ export async function proxy(request: NextRequest) {
 
   const jwtSecret = process.env.JWT_SECRET?.trim();
   if (!jwtSecret) {
-    // No secret configured yet — rely on route-level guards instead of blocking dev.
+    // Fail closed in production: without a signing secret no session can be
+    // verified, so every protected page bounces to login. Local dev (no
+    // secret configured yet) still relies on route-level guards instead of
+    // blocking the developer.
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL === "1") {
+      return NextResponse.redirect(new URL(`${SIGN_IN}?next=${encodeURIComponent(pathname)}`, request.url));
+    }
     return NextResponse.next();
   }
 
@@ -76,7 +82,13 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(accessCookie, encoder.encode(jwtSecret));
+    // Same issuer/audience contract as the API-layer session check
+    // (src/server/auth/session.ts) so both layers agree on validity.
+    const issuer = process.env.JWT_ISSUER?.trim() || "savora-food";
+    const { payload } = await jwtVerify(accessCookie, encoder.encode(jwtSecret), {
+      issuer,
+      audience: "savora-frontend",
+    });
     const role = typeof payload.role === "string" ? (payload.role as Role) : null;
     if (!role || !rule.roles.includes(role)) {
       return NextResponse.redirect(new URL(homeForRole(role), request.url));

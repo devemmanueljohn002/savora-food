@@ -351,6 +351,9 @@ export async function releaseStalePaidOrders(limit = 20): Promise<number> {
  */
 export const DELIVERY_CODE_MAX_ATTEMPTS = 5;
 
+/** Handover-code lifetime from minting (pickup or admin re-issue). */
+export const DELIVERY_CODE_TTL_HOURS = 4;
+
 /**
  * Issue (or re-issue) the 4-digit handover code for an order. Called when
  * the rider picks up the order and by the admin override. Resets the
@@ -363,6 +366,7 @@ export async function issueDeliveryCode(orderId: string): Promise<string | null>
   await db()`
     UPDATE orders
     SET delivery_otp = NULL, delivery_code_hash = ${code ? hashDeliveryCode(code) : null},
+        delivery_code_expires_at = CASE WHEN ${code !== null} THEN NOW() + make_interval(hours => ${DELIVERY_CODE_TTL_HOURS}) ELSE NULL END,
         require_otp = ${enabled}, updated_at = NOW()
     WHERE id = ${orderId}
   `;
@@ -1174,6 +1178,52 @@ export async function getOrderTrackingByNumber(orderNumber: string): Promise<Ord
       createdAt: event.created_at.toISOString(),
     })),
   };
+}
+
+/** Order owner's contact for tracking verification (never exposed). */
+async function getTrackingOwnerContact(
+  orderNumber: string,
+): Promise<{ userId: string; email: string; phone: string | null } | null> {
+  const sql = db();
+  const rows = await sql<{ userId: string; email: string; phone: string | null }[]>`
+    SELECT o.user_id::text AS "userId", u.email, u.phone
+    FROM orders o JOIN users u ON u.id = o.user_id
+    WHERE o.order_number = ${orderNumber} LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+function normalizeContactPhone(phone: string | null | undefined): string {
+  let digits = (phone ?? "").replace(/\D/g, "");
+  if (digits.startsWith("234")) digits = digits.slice(3);
+  else if (digits.startsWith("0")) digits = digits.slice(1);
+  return digits;
+}
+
+/**
+ * Contact-verified order tracking. The order number alone is enumerable, so
+ * full tracking (address, rider phone, handover code) requires either an
+ * owning session or a matching order email/phone. Returns null otherwise —
+ * callers must use the generic not-found message to avoid oracle responses.
+ */
+export async function getVerifiedOrderTracking(input: {
+  orderNumber: string;
+  sessionUserId: string | null;
+  email?: string | null;
+  phone?: string | null;
+}): Promise<OrderTracking | null> {
+  const owner = await getTrackingOwnerContact(input.orderNumber);
+  if (!owner) return null;
+  if (input.sessionUserId && input.sessionUserId === owner.userId) {
+    return getOrderTrackingByNumber(input.orderNumber);
+  }
+  const emailOk =
+    !!input.email && owner.email && input.email.trim().toLowerCase() === owner.email.trim().toLowerCase();
+  const givenPhone = normalizeContactPhone(input.phone);
+  const ownerPhone = normalizeContactPhone(owner.phone);
+  const phoneOk = givenPhone.length >= 7 && ownerPhone.length >= 7 && givenPhone === ownerPhone;
+  if (!emailOk && !phoneOk) return null;
+  return getOrderTrackingByNumber(input.orderNumber);
 }
 
 type PaymentRow = { id: string; order_id: string; payment_reference: string; status: string; amount: string };

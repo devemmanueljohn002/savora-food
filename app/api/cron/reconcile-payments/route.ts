@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, message: "Cron is not configured." }, { status: 500 });
     }
     const supplied =
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ??
-      request.nextUrl.searchParams.get("token")?.trim() ??
-      "";
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+    // Bearer header only — never accept the secret via ?token=: URLs land in
+    // access logs. External schedulers (cron-job.org / GitHub Actions) all
+    // support custom headers.
     if (supplied !== secret) {
       return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
     }

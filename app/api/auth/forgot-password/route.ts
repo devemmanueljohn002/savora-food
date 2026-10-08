@@ -5,11 +5,14 @@ import { RESET_MINUTES, sendPasswordResetEmail } from "@/server/email";
 import { getEnv } from "@/server/env";
 import { createPasswordResetToken, getUserByEmail } from "@/server/auth/store";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 const forgotSchema = z.object({ email: z.email("Enter a valid email address") });
 
 export async function POST(request: Request) {
   try {
+    const limit = limitByIp(request, "forgot-password", 5);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = forgotSchema.safeParse(body);
     if (!parsed.success) {
@@ -36,10 +39,12 @@ export async function POST(request: Request) {
         // outage must not turn this into a 500. Log loudly for ops (this is
         // where email-delivery alerting should hook in) and still return the
         // generic success below. The response stays identical either way so
-        // attackers can't probe which emails are registered.
+        // attackers can't probe which emails are registered. User id/email
+        // stay out of production logs.
         console.error("[auth] password-reset email failed:", {
-          userId: user.id,
-          email,
+          ...(process.env.NODE_ENV === "production"
+            ? {}
+            : { userId: user.id, email }),
           error: mailError instanceof Error ? mailError.message : mailError,
         });
       }

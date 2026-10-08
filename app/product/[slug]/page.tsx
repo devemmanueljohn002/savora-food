@@ -9,6 +9,7 @@ import ReviewForm from "@/components/ReviewForm";
 import BuyBox from "@/components/BuyBox";
 import { getProductBySlug, listProductReviews, listProducts } from "@/server/queries/catalog";
 import { absoluteUrl } from "@/lib/site-url";
+import { toJsonLdScript } from "@/lib/safe-json";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80";
@@ -79,7 +80,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
 
   return (
     <PageShell>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdScript(productJsonLd) }} />
       <section className="container product">
         <ProductImage className="product-image" src={product.image} alt={product.name} width={1200} height={900} priority sizes="(max-width: 1180px) 96vw, 560px" />
         <div>

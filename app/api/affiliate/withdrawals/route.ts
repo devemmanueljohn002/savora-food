@@ -4,11 +4,14 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireSession } from "@/server/auth/guard";
 import { requireAffiliate } from "@/server/affiliates";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
 const bodySchema = z.object({
   amountKobo: z.number().int().positive(),
-  idempotencyKey: z.string().trim().max(100).optional().nullable(),
+  // Client-generated id per submit; REQUIRED so a timeout-then-retry reuses
+  // the same key instead of minting a second debit.
+  idempotencyKey: z.string().trim().min(1).max(100),
   otpCode: z.string().trim().max(10).optional().nullable(),
 });
 
@@ -30,6 +33,8 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireSession(request);
     const affiliate = await requireAffiliate(session.id);
+    const throttle = checkRateLimit(`rl:withdraw:${session.id}`, 20);
+    if (!throttle.ok) return rateLimitedResponse(throttle.retryAfter);
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       throw ApiError.validation("Please fix the errors in your submission.", parsed.error.flatten().fieldErrors);

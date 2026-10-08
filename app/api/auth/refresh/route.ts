@@ -8,7 +8,9 @@ import {
 } from "@/server/auth/session";
 import {
   createSession,
+  findUserByRevokedRefreshHash,
   getSessionByRefreshHash,
+  revokeAllSessionsForUser,
   revokeSession,
   type UserRow,
 } from "@/server/auth/store";
@@ -25,6 +27,13 @@ export async function POST(request: import("next/server").NextRequest) {
 
     const session = await getSessionByRefreshHash(hashToken(refreshToken));
     if (!session) {
+      // Reuse detection: an already-rotated token presented again means the
+      // token was likely stolen — burn every session for that user, not just
+      // this one. Unknown tokens still get the plain expiry message.
+      const stolenFrom = await findUserByRevokedRefreshHash(hashToken(refreshToken)).catch(() => undefined);
+      if (stolenFrom) {
+        await revokeAllSessionsForUser(stolenFrom).catch(() => undefined);
+      }
       throw ApiError.unauthorized("Your session has expired. Please sign in again.");
     }
 

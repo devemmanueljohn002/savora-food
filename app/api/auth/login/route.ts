@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { verifyPassword } from "@/server/auth/password";
 import { getUserByEmailOrPhone } from "@/server/auth/store";
 import { startSession, toPublicUser } from "@/server/auth/session-flow";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Enter your email or phone number"),
@@ -12,6 +13,8 @@ const loginSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const limit = limitByIp(request, "login", 10);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {

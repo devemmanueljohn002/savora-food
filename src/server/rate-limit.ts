@@ -33,3 +33,19 @@ export function rateLimitedResponse(retryAfter: number): NextResponse {
     { status: 429, headers: { "Retry-After": String(retryAfter) } },
   );
 }
+
+/** Client IP for rate-limit keys (first entry of X-Forwarded-For). */
+export function clientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || "unknown";
+}
+
+/** Per-IP token bucket for sensitive non-authenticated endpoints. */
+export function limitByIp(
+  request: Request,
+  scope: string,
+  limit: number,
+  windowMs = 60_000,
+): { ok: boolean; retryAfter: number } {
+  return checkRateLimit(`rl:${scope}:${clientIp(request)}`, limit, windowMs);
+}

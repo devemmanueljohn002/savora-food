@@ -4,6 +4,7 @@ import { ApiError, okMessage, toEnvelope } from "@/server/errors";
 import { hashPassword } from "@/server/auth/password";
 import { consumePasswordResetToken, revokeAllSessionsForUser, updatePassword } from "@/server/auth/store";
 import { hashToken } from "@/server/auth/tokens";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
 const resetSchema = z.object({
   token: z.string().min(1, "Reset token is required"),
@@ -15,6 +16,8 @@ const resetSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const limit = limitByIp(request, "reset-password", 10);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = resetSchema.safeParse(body);
     if (!parsed.success) {

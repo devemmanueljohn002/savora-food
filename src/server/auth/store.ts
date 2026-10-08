@@ -92,7 +92,15 @@ export async function createVendorProfile(input: {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "kitchen";
-  let slug = base;
+  // Storefronts live at /vendor/[slug] under the same namespace as the
+  // protected /vendor/dashboard|orders|… pages: a reserved word must never
+  // become a public slug (breakage + route-existence oracle).
+  const RESERVED_VENDOR_SLUGS = new Set([
+    "dashboard", "orders", "products", "catering", "payouts", "profile", "onboarding",
+    "admin", "api", "auth", "login", "register", "ref", "track", "cart",
+    "checkout", "account", "search", "affiliate", "rider", "vendor",
+  ]);
+  let slug = RESERVED_VENDOR_SLUGS.has(base) ? `${base}-kitchen` : base;
   let n = 2;
   while ((await db()<{ id: string }[]>`SELECT id FROM vendors WHERE slug = ${slug} LIMIT 1`)[0]) {
     slug = `${base}-${n++}`;
@@ -192,6 +200,22 @@ export async function revokeAllSessionsForUser(userId: string): Promise<void> {
   await db()`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${userId} AND revoked_at IS NULL`;
 }
 
+/**
+ * Refresh-token reuse detection: find the owner of an already-rotated
+ * (revoked) refresh token. A stolen token replayed after the legitimate
+ * owner rotated is the classic session-theft signal — callers must revoke
+ * every session for that user, not just 401.
+ */
+export async function findUserByRevokedRefreshHash(refreshTokenHash: string): Promise<string | undefined> {
+  const sql = db();
+  const rows = await sql<{ user_id: string }[]>`
+    SELECT user_id::text AS user_id FROM sessions
+    WHERE refresh_token_hash = ${refreshTokenHash} AND revoked_at IS NOT NULL
+    LIMIT 1
+  `;
+  return rows[0]?.user_id;
+}
+
 export async function createPasswordResetToken(input: {
   userId: string;
   tokenHash: string;
@@ -248,7 +272,14 @@ export async function createEmailVerificationToken(input: {
   tokenHash: string;
   expiresHours: number;
 }): Promise<void> {
-  await db()`
+  const sql = db();
+  // Single live token per user: issuing a new link revokes previously issued
+  // (still unused) ones so old emails cannot be replayed afterwards.
+  await sql`
+    UPDATE email_verification_tokens SET used_at = NOW()
+    WHERE user_id = ${input.userId} AND used_at IS NULL
+  `;
+  await sql`
     INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
     VALUES (${input.userId}, ${input.tokenHash}, NOW() + make_interval(hours => ${input.expiresHours}))
   `;

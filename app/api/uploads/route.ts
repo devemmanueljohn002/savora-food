@@ -4,6 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireSession } from "@/server/auth/guard";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
+import { sniffImage } from "@/server/storage/photos";
 import { isCloudinaryConfigured, uploadImageToCloudinary } from "@/server/cloudinary";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -24,7 +26,9 @@ function extensionFor(mime: string): string {
  */
 export async function POST(request: NextRequest) {
   try {
-    await requireSession(request);
+    const session = await requireSession(request);
+    const throttle = checkRateLimit(`rl:uploads:${session.id}`, 20);
+    if (!throttle.ok) return rateLimitedResponse(throttle.retryAfter);
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
     if (!(file instanceof File)) {
@@ -38,6 +42,23 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
+    // Validate the real bytes, not the client-supplied MIME/size: magic-byte
+    // sniff for JPEG/PNG/WebP (must match the claimed type), GIF89a/87a
+    // header for GIFs. Rejects polyglots and renamed executables.
+    if (bytes.byteLength <= 0 || bytes.byteLength > MAX_BYTES) {
+      throw ApiError.validation("Image must be smaller than 5 MB.");
+    }
+    if (file.type === "image/gif") {
+      const header = bytes.subarray(0, 6).toString("ascii");
+      if (header !== "GIF87a" && header !== "GIF89a") {
+        throw ApiError.validation("That file is not a valid GIF image.");
+      }
+    } else {
+      const sniffed = sniffImage(bytes);
+      if (!sniffed || extensionFor(file.type) !== sniffed.format) {
+        throw ApiError.validation("That file is not a valid image.");
+      }
+    }
     const filename = `${randomUUID()}.${extensionFor(file.type)}`;
 
     if (isCloudinaryConfigured()) {

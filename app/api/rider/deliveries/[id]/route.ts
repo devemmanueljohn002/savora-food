@@ -5,6 +5,7 @@ import { requireRole, ROLES } from "@/server/auth/guard";
 import { getRiderByUserId } from "@/server/riders";
 import { notifyWithEmail } from "@/server/notify";
 import { assertOrderTransition } from "@/server/order-transitions";
+import { DELIVERY_CODE_TTL_HOURS } from "@/server/orders";
 import { db } from "@/server/db";
 
 const actionSchema = z.object({
@@ -148,12 +149,13 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       vendor_id: string;
       delivery_otp: string | null;
       delivery_code_hash: string | null;
+      delivery_code_expires_at: Date | null;
       require_otp: boolean;
     }[]>`
       SELECT d.id, d.status, d.delivery_code_attempts,
              o.id AS order_id, o.order_number, o.status AS order_status,
              o.user_id AS customer_id, o.vendor_id,
-              o.delivery_otp, o.delivery_code_hash, COALESCE(o.require_otp, FALSE) AS require_otp
+              o.delivery_otp, o.delivery_code_hash, o.delivery_code_expires_at, COALESCE(o.require_otp, FALSE) AS require_otp
       FROM deliveries d
       JOIN orders o ON o.id = d.order_id
       WHERE d.id = ${id} AND d.delivery_partner_id = ${rider.id}
@@ -248,7 +250,7 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
         // transaction. If it didn't (and a code is required), roll everything
         // back so we never email a code that cannot verify.
         const stored = await tx<{ delivery_code_hash: string | null }[]>`
-          UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, updated_at = NOW()
+          UPDATE orders SET status = 'OUT_FOR_DELIVERY', delivery_otp = NULL, delivery_code_hash = ${handoverHash}, require_otp = ${otpEnabled}, delivery_code_expires_at = CASE WHEN ${handoverHash !== null} THEN NOW() + make_interval(hours => ${DELIVERY_CODE_TTL_HOURS}) ELSE NULL END, updated_at = NOW()
           WHERE id = ${delivery.order_id}
           RETURNING delivery_code_hash
         `;
@@ -297,6 +299,9 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       if (delivery.require_otp) {
         const supplied = (parsed.data.otp ?? parsed.data.code ?? "").trim();
         if (!supplied) throw ApiError.validation("Enter the 4-digit delivery code from the customer.");
+        if (delivery.delivery_code_expires_at && new Date(delivery.delivery_code_expires_at).getTime() < Date.now()) {
+          throw ApiError.validation("This delivery code has expired. Ask support to re-issue a new code.");
+        }
         const { DELIVERY_CODE_MAX_ATTEMPTS, verifyDeliveryCode } = await import("@/server/orders");
         if (delivery.delivery_code_attempts >= DELIVERY_CODE_MAX_ATTEMPTS) {
           throw ApiError.forbidden(

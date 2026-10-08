@@ -859,6 +859,12 @@ async function payoutAccountChangedAt(owner: Owner): Promise<Date | null> {
     `;
     return rows[0]?.payout_account_changed_at ?? null;
   }
+  if (owner.type === "AFFILIATE") {
+    const rows = await sql<{ payout_account_changed_at: Date | null }[]>`
+      SELECT payout_account_changed_at FROM affiliates WHERE id = ${owner.id} LIMIT 1
+    `;
+    return rows[0]?.payout_account_changed_at ?? null;
+  }
   const rows = await sql<{ payout_account_changed_at: Date | null }[]>`
     SELECT payout_account_changed_at FROM delivery_partners WHERE id = ${owner.id} LIMIT 1
   `;
@@ -886,6 +892,33 @@ export async function countTodayWithdrawals(owner: Owner): Promise<number> {
       AND created_at >= date_trunc('day', NOW())
   `;
   return Number(rows[0]?.count ?? 0);
+}
+
+/**
+ * Best-effort pre-validation before an OTP is consumed: cooling window,
+ * daily limit, and balance sufficiency. Read-only (no mutation, no lock),
+ * so the locked transaction inside requestWithdrawal stays authoritative —
+ * this only spares users from burning a single-use code on a request that
+ * is already doomed. Keep in sync with the in-transaction checks.
+ */
+export async function precheckWithdrawal(input: { owner: Owner; amountKobo: number }): Promise<void> {
+  const policy = await getOwnerPolicy(input.owner.type);
+  const coolingHours = await getCoolingHours();
+  const changedAt = await payoutAccountChangedAt(input.owner);
+  if (isCoolingActive(changedAt, coolingHours)) {
+    throw ApiError.conflict(
+      `For your protection, withdrawals are paused for ${coolingHours} hours after a bank account change. Try again later or contact support.`,
+    );
+  }
+  const dailyLimit = await getDailyLimit(input.owner.type);
+  const todayCount = await countTodayWithdrawals(input.owner);
+  if (isDailyLimitReached(todayCount, dailyLimit)) {
+    throw ApiError.conflict(
+      `Daily withdrawal limit reached (${dailyLimit} per day). Try again tomorrow.`,
+    );
+  }
+  const balances = await getWalletBalance(input.owner);
+  validateWithdrawalAmount(input.amountKobo, balances.availableKobo, policy);
 }
 
 /**
@@ -918,28 +951,13 @@ export async function requestWithdrawal(input: RequestWithdrawalInput): Promise<
     throw ApiError.validation("Add and verify your bank account before withdrawing.");
   }
 
-  // Cooling period: a recently swapped payout account blocks withdrawals —
-  // the stolen-session + swapped-account fraud pattern.
-  const coolingHours = await getCoolingHours();
-  const changedAt = await payoutAccountChangedAt(input.owner);
-  if (isCoolingActive(changedAt, coolingHours)) {
-    throw ApiError.conflict(
-      `For your protection, withdrawals are paused for ${coolingHours} hours after a bank account change. Try again later or contact support.`,
-    );
-  }
-
-  // Daily limits (CONFIGURABLE per role): enforced server-side on every request.
-  const dailyLimit = await getDailyLimit(input.owner.type);
-  const todayCount = await countTodayWithdrawals(input.owner);
-  if (isDailyLimitReached(todayCount, dailyLimit)) {
-    throw ApiError.conflict(
-      `Daily withdrawal limit reached (${dailyLimit} per day). Try again tomorrow.`,
-    );
-  }
-
+  // Cooling + daily-limit are enforced authoritatively inside the locked
+  // transaction below (after lockWalletTx serializes concurrent requests).
+  // NOTE: precheckWithdrawal() mirrors those checks so a doomed request
+  // fails before its OTP is consumed — keep the three in sync.
+  const settings = await payoutSettings();
   // Transfer-fee snapshot: stored per request so later config changes cannot
   // rewrite history. USER bearer → recipient gets amount − fee.
-  const settings = await payoutSettings();
   const feeKobo = input.feeKobo ?? resolveTransferFeeKobo(settings);
   const feeBearer = input.feeBearer ?? resolveFeeBearer(settings);
   const netKobo = input.netKobo ?? computeNetKobo(input.amountKobo, feeKobo, feeBearer);
@@ -952,6 +970,23 @@ export async function requestWithdrawal(input: RequestWithdrawalInput): Promise<
     const withdrawal = await sql.begin(async (tx) => {
       await ensureWalletTx(tx, input.owner);
       const balances = await lockWalletTx(tx, input.owner);
+      // Authoritative cooling + daily-limit checks run AFTER the wallet lock
+      // is held, so concurrent requests serialize here and each sees all
+      // previously committed withdrawals (no TOCTOU bypass of the caps).
+      const coolingHours = await getCoolingHours();
+      const changedAt = await payoutAccountChangedAt(input.owner);
+      if (isCoolingActive(changedAt, coolingHours)) {
+        throw ApiError.conflict(
+          `For your protection, withdrawals are paused for ${coolingHours} hours after a bank account change. Try again later or contact support.`,
+        );
+      }
+      const dailyLimit = await getDailyLimit(input.owner.type);
+      const todayCount = await countTodayWithdrawals(input.owner);
+      if (isDailyLimitReached(todayCount, dailyLimit)) {
+        throw ApiError.conflict(
+          `Daily withdrawal limit reached (${dailyLimit} per day). Try again tomorrow.`,
+        );
+      }
       validateWithdrawalAmount(input.amountKobo, balances.available, policy);
 
       const nextAvailable = balances.available - input.amountKobo;
@@ -1032,6 +1067,23 @@ export async function markWithdrawalProcessing(withdrawalId: string, reason: str
     SET status = 'PROCESSING', failure_reason = ${reason}, updated_at = NOW()
     WHERE id = ${withdrawalId} AND status = 'PENDING'
   `;
+}
+
+/**
+ * Atomically claim a PENDING withdrawal for approval (PENDING → PROCESSING).
+ * Returns true when this caller won the claim. Concurrent approvers lose
+ * (zero rows) and must stop BEFORE any Paystack call — this is what prevents
+ * double transfers for one withdrawal row.
+ */
+export async function claimWithdrawalForApproval(withdrawalId: string, adminId: string): Promise<boolean> {
+  const sql = db();
+  const claimed = await sql<{ id: string }[]>`
+    UPDATE withdrawals
+    SET status = 'PROCESSING', approved_by = ${adminId}, updated_at = NOW()
+    WHERE id = ${withdrawalId} AND status = 'PENDING'
+    RETURNING id
+  `;
+  return claimed.length > 0;
 }
 
 /**

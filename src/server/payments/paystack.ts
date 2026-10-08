@@ -143,7 +143,7 @@ export function paystackMismatchReason(
   if (verified.currency && verified.currency.toUpperCase() !== wantCurrency.toUpperCase()) {
     return `Currency mismatch (expected ${wantCurrency}).`;
   }
-  if (verified.amount !== null && verified.amount !== expected.amountKobo) {
+  if (verified.amount === null || verified.amount !== expected.amountKobo) {
     return "Amount paid does not match the order total.";
   }
   return null;

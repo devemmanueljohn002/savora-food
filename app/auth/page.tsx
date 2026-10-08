@@ -122,6 +122,11 @@ function AuthCard() {
         password: form.password,
         role,
       });
+      if (user.existingAccount) {
+        setNotice("An account with this email already exists. We've emailed you a sign-in reminder — check your inbox.");
+        setBusy(false);
+        return;
+      }
       localStorage.setItem("savora.user", JSON.stringify(user));
       window.location.href = user.role === "VENDOR" ? "/vendor/onboarding" : destination(user.role);
     } catch (reason) {

@@ -44,6 +44,11 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
   }
 
   if (!resendApiKey) {
+    // No provider configured: log recipients + bodies (reset links, OTPs)
+    // only outside production — never in prod logs.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Email provider is not configured.");
+    }
     console.log(`[email:dev] To: ${message.to} | Subject: ${message.subject}`);
     console.log(`[email:dev] ${message.text}`);
     return;

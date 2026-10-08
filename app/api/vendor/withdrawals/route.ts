@@ -4,15 +4,17 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext } from "@/server/vendors";
 import { getPayoutOverview, toWithdrawalResponse, withdraw } from "@/server/payouts";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
 const bodySchema = z.object({
   // Integer kobo from the client; re-validated server-side against the
   // per-owner policy and the locked balance.
   amountKobo: z.number().int().positive(),
-  // Client-generated id per submit; dedupes double-clicks. The server falls
-  // back to generating one when absent.
-  idempotencyKey: z.string().trim().max(100).optional().nullable(),
+  // Client-generated id per submit; REQUIRED so a timeout-then-retry reuses
+  // the same key instead of minting a second debit. The frontend mints one
+  // UUID per submit attempt and reuses it across retries.
+  idempotencyKey: z.string().trim().min(1).max(100),
   // 6-digit email OTP from POST /vendor/withdrawals/otp (single-use).
   otpCode: z.string().trim().max(10).optional().nullable(),
 });
@@ -39,6 +41,8 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requireVendor(request);
     const vendor = await getVendorContext(session.id);
+    const throttle = checkRateLimit(`rl:withdraw:${session.id}`, 20);
+    if (!throttle.ok) return rateLimitedResponse(throttle.retryAfter);
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       throw ApiError.validation("Please fix the errors in your submission.", parsed.error.flatten().fieldErrors);

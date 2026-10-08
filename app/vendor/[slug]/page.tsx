@@ -5,6 +5,7 @@ import PageShell from "@/components/PageShell";
 import ProductCard from "@/components/ProductCard";
 import { getVendorBySlug, listProducts } from "@/server/queries/catalog";
 import { absoluteUrl } from "@/lib/site-url";
+import { toJsonLdScript } from "@/lib/safe-json";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1600&q=85";
@@ -69,7 +70,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
 
   return (
     <PageShell>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(restaurantJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdScript(restaurantJsonLd) }} />
       <section className="section container">
         <Image
           className="hero-img"

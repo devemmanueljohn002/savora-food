@@ -333,14 +333,25 @@ function Tracker() {
   const searchParams = useSearchParams();
   const preset = searchParams.get("number")?.trim() ?? "";
   const [value, setValue] = useState(preset);
+  const [contact, setContact] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tracked, setTracked] = useState<OrderTracking | null>(null);
   const [recent, setRecent] = useState<RecentOrder[]>([]);
   const trackedRef = useRef<OrderTracking | null>(null);
+  const contactRef = useRef("");
   useEffect(() => {
     trackedRef.current = tracked;
   }, [tracked]);
+  useEffect(() => {
+    contactRef.current = contact;
+  }, [contact]);
+
+  const contactFor = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    return trimmed.includes("@") ? { email: trimmed } : { phone: trimmed };
+  };
 
   const lookup = useCallback(async (number: string) => {
     const clean = number.trim();
@@ -351,7 +362,7 @@ function Tracker() {
     setBusy(true);
     setError("");
     try {
-      setTracked(await trackOrderByNumber(clean));
+      setTracked(await trackOrderByNumber(clean, contactFor(contactRef.current)));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We couldn't find that order number.");
       setTracked(null);
@@ -390,7 +401,7 @@ function Tracker() {
     if (!trackedNumber || !trackedStatus || CLOSED.includes(trackedStatus)) return;
     const timer = setInterval(async () => {
       try {
-        const fresh = await trackOrderByNumber(trackedRef.current?.orderNumber ?? "");
+        const fresh = await trackOrderByNumber(trackedRef.current?.orderNumber ?? "", contactFor(contactRef.current));
         if (fresh) setTracked(fresh);
       } catch {
         // Keep the last known state on transient failures.
@@ -421,6 +432,14 @@ function Tracker() {
             onChange={(event) => setValue(event.target.value)}
             placeholder="SVR-123456"
             aria-label="Order number"
+          />
+          <input
+            className="track-input"
+            value={contact}
+            onChange={(event) => setContact(event.target.value)}
+            placeholder="Order email or phone (not needed when signed in)"
+            aria-label="Order email or phone"
+            autoComplete="email"
           />
           <button className="track-btn" type="submit" disabled={busy}>
             {busy ? "Please wait..." : "Track"}

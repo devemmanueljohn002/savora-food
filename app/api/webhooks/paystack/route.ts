@@ -35,7 +35,10 @@ function extractReference(payload: Record<string, unknown>): string | null {
 function eventKeyFor(payload: Record<string, unknown>, event: string, reference: string | null): string {
   const data = asRecord(payload.data);
   const paystackId = data ? (firstString(data.id) ?? (typeof data.id === "number" ? String(data.id) : null)) : null;
-  if (paystackId) return `paystack:${paystackId}`;
+  // The event name is part of the key: transfer.success followed by
+  // transfer.failed for the same transfer must NOT collide, otherwise the
+  // reversal would be swallowed as a "duplicate" and balances never restored.
+  if (paystackId) return `paystack:${paystackId}:${event}`;
   return `fallback:${event}:${reference ?? "noref"}`;
 }
 

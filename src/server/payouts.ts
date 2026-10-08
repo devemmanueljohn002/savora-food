@@ -334,6 +334,11 @@ export async function withdraw(input: {
   }
 
   // OTP first: no funds move until the email code is consumed (single-use).
+  // Pre-validate cooling/limit/balance BEFORE consuming the code so a doomed
+  // request fails without burning it. The locked transaction re-checks
+  // authoritatively, so this is strictly a UX pre-filter, not a gate.
+  const { precheckWithdrawal } = await import("./wallet");
+  await precheckWithdrawal({ owner: input.owner, amountKobo: input.amountKobo });
   await verifyWithdrawalOtp(input.owner, input.otpCode.trim());
 
   // Matured holds unlock here too (not just on balance views), so an owner

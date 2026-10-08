@@ -4,6 +4,7 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { hashPassword } from "@/server/auth/password";
 import { createUser, createDeliveryPartnerProfile, createVendorProfile, getUserByEmail, createEmailVerificationToken } from "@/server/auth/store";
 import { AFFILIATE_COOKIE, resolveSignupReferrer } from "@/server/affiliates";
+import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 import { startSession, toPublicUser } from "@/server/auth/session-flow";
 import { generateOpaqueToken, hashToken } from "@/server/auth/tokens";
 import { getEnv } from "@/server/env";
@@ -37,7 +38,11 @@ function uniqueViolation(error: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // Captured for the insert-race path below (input stays try-scoped).
+  let signupEmail = "";
   try {
+    const limit = limitByIp(request, "register", 10);
+    if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
     const body = await request.json().catch(() => null);
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
@@ -46,10 +51,16 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data;
+    signupEmail = input.email;
 
+    // No email-enumeration oracle: an already-registered email gets the same
+    // 201 shape (plus a sign-in reminder email) instead of a 409 — no user
+    // data, no session. The race between this check and INSERT (23505) is
+    // handled identically below.
     const existing = await getUserByEmail(input.email);
     if (existing) {
-      throw ApiError.conflict("An account with this email already exists. Try signing in.");
+      await sendExistingAccountReminder(input.email).catch(() => undefined);
+      return NextResponse.json(ok({ registered: true, existingAccount: true }), { status: 201 });
     }
 
     // Referral attribution for NEW signups only: save the referrer from the
@@ -110,12 +121,21 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     if (uniqueViolation(error)) {
-      return NextResponse.json(
-        toEnvelope(ApiError.conflict("An account with this email already exists. Try signing in.")).envelope,
-        { status: 409 },
-      );
+      // Lost the insert race: same generic 201 as the pre-check path.
+      await sendExistingAccountReminder(signupEmail).catch(() => undefined);
+      return NextResponse.json(ok({ registered: true, existingAccount: true }), { status: 201 });
     }
     const { envelope, status } = toEnvelope(error);
     return NextResponse.json(envelope, { status });
   }
+}
+
+/** Sign-in reminder for already-registered emails. Fire-and-forget. */
+async function sendExistingAccountReminder(email: string): Promise<void> {
+  const { sendEmail } = await import("@/server/email");
+  await sendEmail({
+    to: email,
+    subject: "Savora Food — you already have an account",
+    text: `Someone tried to register with this email address. You already have a Savora Food account — sign in at ${getEnv().appUrl}/login instead. If this wasn't you, you can safely ignore this email.`,
+  });
 }

@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { getHomeRouteForRole } from "@/lib/role-routes";
 import { ApiError } from "../errors";
 import { getEnv } from "../env";
@@ -43,7 +43,10 @@ export function roleHome(role: string): string {
   return getHomeRouteForRole(role);
 }
 
-export function buildGoogleAuthorizeUrl(next: string | null): string {
+export function buildGoogleAuthorizeUrl(
+  next: string | null,
+  oauth?: { state: string; codeChallenge: string },
+): string {
   const { clientId, redirectUri } = requireGoogleConfig();
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set("client_id", clientId);
@@ -52,8 +55,59 @@ export function buildGoogleAuthorizeUrl(next: string | null): string {
   url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("access_type", "online");
   url.searchParams.set("prompt", "select_account");
-  if (next) url.searchParams.set("state", next);
+  if (oauth) {
+    // CSRF-bound flow: random state + PKCE S256. The post-login redirect
+    // (`next`) travels in its own short-lived httpOnly cookie instead.
+    url.searchParams.set("state", oauth.state);
+    url.searchParams.set("code_challenge", oauth.codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  } else if (next) {
+    url.searchParams.set("state", next);
+  }
   return url.toString();
+}
+
+/** Short-lived OAuth cookies (CSRF state + PKCE verifier + post-login target). */
+export const OAUTH_STATE_COOKIE = "savora_oauth_state";
+export const OAUTH_VERIFIER_COOKIE = "savora_oauth_verifier";
+export const OAUTH_NEXT_COOKIE = "savora_oauth_next";
+const OAUTH_COOKIE_MAX_AGE = 10 * 60;
+
+export function newOAuthState(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function newCodeVerifier(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function codeChallengeS256(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function oauthCookieOptions(): {
+  httpOnly: true;
+  sameSite: "lax";
+  secure: boolean;
+  path: string;
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/auth/callback/google",
+    maxAge: OAUTH_COOKIE_MAX_AGE,
+  };
+}
+
+/** Constant-time state comparison (length-checked first). */
+export function verifyOAuthState(supplied: string, expected: string): boolean {
+  if (!supplied || !expected) return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 type TokenResponse = {
@@ -88,7 +142,7 @@ export type GoogleProfile = {
   lastName: string;
 };
 
-export async function exchangeGoogleCode(code: string): Promise<string> {
+export async function exchangeGoogleCode(code: string, codeVerifier?: string): Promise<string> {
   const { clientId, clientSecret, redirectUri } = requireGoogleConfig();
   const body = await postForm(GOOGLE_TOKEN_URL, {
     code,
@@ -96,6 +150,7 @@ export async function exchangeGoogleCode(code: string): Promise<string> {
     client_secret: clientSecret,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
+    ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
   });
   if (!body.access_token) {
     throw new ApiError(

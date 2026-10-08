@@ -3,12 +3,15 @@ import { ok, toEnvelope } from "@/server/errors";
 import { ROLES, requireRole } from "@/server/auth/guard";
 import { getRiderContext } from "@/server/riders";
 import { requestWithdrawalOtp } from "@/server/withdrawal-otp";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 import type { Owner } from "@/server/wallet";
 
 /** Send a 6-digit email OTP that the rider withdrawal POST must present. */
 export async function POST(request: NextRequest) {
   try {
     const session = await requireRole(request, [ROLES.DELIVERY_PARTNER]);
+    const throttle = checkRateLimit(`rl:otp:${session.id}`, 5);
+    if (!throttle.ok) return rateLimitedResponse(throttle.retryAfter);
     const rider = await getRiderContext(session.id);
     const owner: Owner = { type: "RIDER", id: rider.id };
     const result = await requestWithdrawalOtp(owner, session.id);

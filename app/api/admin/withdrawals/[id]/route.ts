@@ -5,6 +5,7 @@ import { auditLog, requireAdminUser } from "@/server/admin";
 import { db } from "@/server/db";
 import {
   applyAdjustment,
+  claimWithdrawalForApproval,
   failWithdrawalAndReverse,
   nairaToKobo,
   type Owner,
@@ -95,6 +96,12 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
     // Approve: funds were already locked at request time, so executing now is
     // safe. Sends the NET amount (after the stored fee snapshot) with the
     // per-owner Paystack reason. Ambiguous Paystack failures park as PROCESSING.
+    // Atomic claim first: a concurrent approver loses here and never reaches
+    // the Paystack call, so one row can never produce two transfers.
+    const claimed = await claimWithdrawalForApproval(id, admin.id);
+    if (!claimed) {
+      throw ApiError.conflict("This withdrawal was already reviewed by someone else.");
+    }
     const netKobo =
       withdrawal.net_kobo != null ? Number(withdrawal.net_kobo) : Number(withdrawal.amount_kobo);
     const updated = await initiateTransferAndRecord({
