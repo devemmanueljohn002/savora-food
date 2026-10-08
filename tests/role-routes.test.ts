@@ -19,9 +19,9 @@ describe("role route helpers (single source of truth)", () => {
     expect(getHomeRouteForRole("SOMETHING_ELSE")).toBe("/");
   });
 
-  it("sends Account taps to account settings for customers, dashboards for staff", () => {
+  it("sends Account taps to the dashboard overview for customers, dashboards for staff", () => {
     expect(getAccountRouteForRole(undefined)).toBe("/auth");
-    expect(getAccountRouteForRole("CUSTOMER")).toBe("/account/profile");
+    expect(getAccountRouteForRole("CUSTOMER")).toBe("/dashboard");
     expect(getAccountRouteForRole("VENDOR")).toBe("/vendor/dashboard");
     expect(getAccountRouteForRole("DELIVERY_PARTNER")).toBe("/rider/dashboard");
     expect(getAccountRouteForRole("ADMIN")).toBe("/admin/dashboard");

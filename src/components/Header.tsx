@@ -215,7 +215,7 @@ export default function Header() {
             <Link
               className="hdr-account"
               href={accountHref}
-              aria-label={`Account settings (${firstName})`}
+              aria-label={`Account dashboard (${firstName})`}
             >
               <LayoutDashboard className="hdr-ico" aria-hidden="true" /> {firstName}
             </Link>
@@ -295,7 +295,7 @@ export default function Header() {
                 <>
                   <Link
                     className="hdr-drawer-account"
-                    href={accountHref}
+                    href="/account/profile"
                     onClick={close}
                     aria-label={`Profile and settings (${firstName})`}
                   >

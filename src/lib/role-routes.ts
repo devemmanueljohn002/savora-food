@@ -11,7 +11,9 @@
  *   that is /dashboard (their orders/favorites hub), not /.
  * - getAccountRouteForRole: where the Account entry points (bottom nav,
  *   header user button) lead. Staff roles land on their dashboard;
- *   customers land on account settings. Unknown → /auth.
+ *   customers land on their dashboard overview (/dashboard defaults to the
+ *   Overview tab; Profile opens only via explicit picks like
+ *   /account/profile or ?tab=profile). Unknown → /auth.
  */
 
 export type AppRole = "CUSTOMER" | "VENDOR" | "DELIVERY_PARTNER" | "ADMIN" | "SUPER_ADMIN";
@@ -38,7 +40,7 @@ export function getDashboardRouteForRole(role?: string | null): string {
 
 export function getAccountRouteForRole(role?: string | null): string {
   if (!role) return "/auth";
-  if (role === "CUSTOMER") return "/account/profile";
+  if (role === "CUSTOMER") return "/dashboard";
   return getHomeRouteForRole(role);
 }
 
