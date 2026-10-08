@@ -9,18 +9,56 @@ export type BankOption = {
 };
 
 /**
- * Fallback so a bank form never renders empty when the Paystack fetch fails.
- * Real NUBAN codes for major Nigerian banks (same codes Paystack returns).
+ * Last-resort offline list, used ONLY when the Paystack fetch fails — the live
+ * endpoint returns the full sorted list. Real NUBAN/Paystack codes, including
+ * fintechs and microfinance banks (same codes Paystack returns).
  */
 export const FALLBACK_BANKS: BankOption[] = [
+  { name: "9mobile 9Payment Service Bank", code: "120001" },
+  { name: "Abbey Mortgage Bank", code: "801" },
   { name: "Access Bank", code: "044" },
+  { name: "Airtel Smartcash PSB", code: "120004" },
+  { name: "ALAT by WEMA", code: "035A" },
+  { name: "Carbon", code: "565" },
+  { name: "Citibank Nigeria", code: "023" },
+  { name: "Coronation Merchant Bank", code: "559" },
+  { name: "Ecobank Nigeria", code: "050" },
+  { name: "Eyowo", code: "50126" },
   { name: "Fidelity Bank", code: "070" },
   { name: "First Bank of Nigeria", code: "011" },
+  { name: "First City Monument Bank", code: "214" },
+  { name: "FSDH Merchant Bank", code: "501" },
+  { name: "Globus Bank", code: "00103" },
+  { name: "GoMoney", code: "100022" },
   { name: "Guaranty Trust Bank", code: "058" },
+  { name: "Heritage Bank", code: "030" },
+  { name: "HopePSB", code: "120002" },
+  { name: "Jaiz Bank", code: "301" },
+  { name: "Keystone Bank", code: "082" },
+  { name: "Kuda Bank", code: "50211" },
+  { name: "Lotus Bank", code: "303" },
+  { name: "Mint MFB", code: "50304" },
+  { name: "Moniepoint MFB", code: "50515" },
+  { name: "MTN Momo PSB", code: "120003" },
+  { name: "OPay Digital Services", code: "999992" },
+  { name: "Paga", code: "100002" },
+  { name: "PalmPay", code: "999991" },
+  { name: "Parallex Bank", code: "104" },
   { name: "Polaris Bank", code: "076" },
+  { name: "PremiumTrust Bank", code: "105" },
+  { name: "Providus Bank", code: "101" },
+  { name: "Rubies MFB", code: "125" },
+  { name: "Sparkle Microfinance Bank", code: "51310" },
+  { name: "Stanbic IBTC Bank", code: "221" },
+  { name: "Standard Chartered Bank", code: "068" },
   { name: "Sterling Bank", code: "232" },
+  { name: "SunTrust Bank", code: "100" },
+  { name: "TAJ Bank", code: "302" },
+  { name: "Titan Bank", code: "102" },
   { name: "Union Bank of Nigeria", code: "032" },
   { name: "United Bank for Africa", code: "033" },
+  { name: "Unity Bank", code: "215" },
+  { name: "VFD Microfinance Bank", code: "566" },
   { name: "Wema Bank", code: "035" },
   { name: "Zenith Bank", code: "057" },
 ];
@@ -62,7 +100,11 @@ export default function BankCombobox({
   const inputId = id ?? `bank-combobox-${fallbackId.replace(/[^a-zA-Z0-9]/g, "")}`;
   const listId = `${inputId}-list`;
   const usingFallback = !banks || banks.length === 0;
-  const effective = useMemo(() => (usingFallback ? FALLBACK_BANKS : (banks ?? [])), [usingFallback, banks]);
+  // Server already sorts A–Z; sort again defensively so filtering keeps order.
+  const effective = useMemo(() => {
+    const list = usingFallback ? FALLBACK_BANKS : (banks ?? []);
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [usingFallback, banks]);
   const selected = effective.find((bank) => bank.code === value) ?? null;
 
   const [open, setOpen] = useState(false);
@@ -222,7 +264,7 @@ export default function BankCombobox({
 
       {usingFallback && showFallbackNote && !loading ? (
         <p className="muted-small" style={{ margin: "6px 0 0" }}>
-          Showing major banks{error ? " (offline list)" : ""} — retry for the full list.
+          Showing offline bank list — retry for the full live list.
         </p>
       ) : null}
     </div>

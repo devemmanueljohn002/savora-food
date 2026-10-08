@@ -80,12 +80,21 @@ type PaystackEnvelope<T> = {
   status: boolean;
   message?: string;
   data: T;
+  /** Present on paginated list endpoints (e.g. GET /bank with use_cursor=true). */
+  meta?: {
+    next?: string | null;
+    previous?: string | null;
+    perPage?: number;
+  } | null;
 };
 
-async function paystackRequest<T>(
+type PaystackRequestInit = { method?: string; body?: unknown; fetchImpl?: FetchImpl; timeoutMs?: number };
+
+/** Raw fetch: auth header + timeout + network-error mapping. No status check. */
+async function paystackRaw<T>(
   path: string,
-  init: { method?: string; body?: unknown; fetchImpl?: FetchImpl; timeoutMs?: number } = {},
-): Promise<T> {
+  init: PaystackRequestInit = {},
+): Promise<{ response: Response; body: PaystackEnvelope<T> | null }> {
   const secret = requireSecretKey();
   const fetchImpl = init.fetchImpl ?? fetch;
   const controller = new AbortController();
@@ -122,21 +131,43 @@ async function paystackRequest<T>(
   }
 
   const body = (await response.json().catch(() => null)) as PaystackEnvelope<T> | null;
+  return { response, body };
+}
+
+/** Shared failure mapping for non-OK Paystack responses. */
+function throwForPaystackFailure(response: Response, body: PaystackEnvelope<unknown> | null): never {
+  const message = body?.message ?? `Paystack returned an error (${response.status}).`;
+  const { ambiguous, insufficientFunds } = classifyPaystackFailure({
+    httpStatus: response.status,
+    message,
+  });
+  throw new PaystackTransferError({
+    message,
+    paystackMessage: message,
+    httpStatus: response.status,
+    ambiguous,
+    insufficientFunds,
+  });
+}
+
+async function paystackRequest<T>(path: string, init: PaystackRequestInit = {}): Promise<T> {
+  const { response, body } = await paystackRaw<T>(path, init);
   if (!response.ok || !body || body.status === false) {
-    const message = body?.message ?? `Paystack returned an error (${response.status}).`;
-    const { ambiguous, insufficientFunds } = classifyPaystackFailure({
-      httpStatus: response.status,
-      message,
-    });
-    throw new PaystackTransferError({
-      message,
-      paystackMessage: message,
-      httpStatus: response.status,
-      ambiguous,
-      insufficientFunds,
-    });
+    throwForPaystackFailure(response, body);
   }
   return body.data;
+}
+
+/** Same as paystackRequest but also returns the pagination cursor (meta). */
+async function paystackRequestWithMeta<T>(
+  path: string,
+  init: PaystackRequestInit = {},
+): Promise<{ data: T; next: string | null }> {
+  const { response, body } = await paystackRaw<T>(path, init);
+  if (!response.ok || !body || body.status === false) {
+    throwForPaystackFailure(response, body);
+  }
+  return { data: body.data, next: body.meta?.next ?? null };
 }
 
 // ── Bank list + account verification ─────────────────────────────────────────
@@ -151,9 +182,28 @@ export type PaystackBank = {
   type: string;
 };
 
+const BANK_PAGE_SIZE = 100;
+/** Safety cap: 10 pages × 100 banks — far above the ~200 Nigerian banks Paystack lists. */
+const BANK_MAX_PAGES = 10;
+
+/**
+ * Full Nigerian bank list. Follows Paystack's cursor pagination
+ * (meta.next) until every page is loaded — a single page is capped at 100.
+ */
 export async function listBanks(fetchImpl?: FetchImpl): Promise<PaystackBank[]> {
-  const data = await paystackRequest<PaystackBank[]>("/bank?country=nigeria&perPage=100", { fetchImpl });
-  return Array.isArray(data) ? data : [];
+  const all: PaystackBank[] = [];
+  let next: string | null = null;
+  for (let page = 0; page < BANK_MAX_PAGES; page++) {
+    const path: string =
+      `/bank?country=nigeria&perPage=${BANK_PAGE_SIZE}&use_cursor=true` +
+      (next ? `&next=${encodeURIComponent(next)}` : "");
+    const { data, next: following }: { data: PaystackBank[]; next: string | null } =
+      await paystackRequestWithMeta<PaystackBank[]>(path, { fetchImpl });
+    if (Array.isArray(data)) all.push(...data);
+    if (!following) break;
+    next = following;
+  }
+  return all;
 }
 
 export type ResolveAccountResult = {
