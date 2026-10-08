@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AdminShell, AdminSignIn, naira } from "@/components/AdminShell";
 import { Table } from "@/components/ui";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   useAdminPayouts,
   useAdminPayoutSettings,
@@ -16,10 +17,28 @@ import {
 
 function PayoutActions({ id, status }: { id: string; status: string }) {
   const update = useUpdateAdminPayout(id);
+  const confirm = useConfirm();
   const [error, setError] = useState("");
 
   async function set(next: "PROCESSING" | "PAID" | "FAILED") {
     setError("");
+    if (next === "PAID") {
+      const ok = await confirm({
+        title: "Mark payout as paid?",
+        body: "Confirm the transfer already left the account before marking it paid.",
+        confirmLabel: "Mark paid",
+      });
+      if (!ok) return;
+    }
+    if (next === "FAILED") {
+      const ok = await confirm({
+        title: "Mark payout as failed?",
+        body: "The vendor will need a new payout to be settled.",
+        confirmLabel: "Mark failed",
+        danger: true,
+      });
+      if (!ok) return;
+    }
     try {
       await update.mutateAsync({ status: next });
     } catch (reason) {
@@ -51,12 +70,29 @@ function PayoutActions({ id, status }: { id: string; status: string }) {
   );
 }
 
-function WithdrawalActions({ id, status }: { id: string; status: string }) {
+function WithdrawalActions({ id, status, reference, amount, ownerName }: { id: string; status: string; reference: string; amount: number; ownerName: string }) {
   const review = useReviewAdminWithdrawal(id);
+  const confirm = useConfirm();
   const [error, setError] = useState("");
 
   async function act(action: "approve" | "reject") {
     setError("");
+    if (action === "approve") {
+      const ok = await confirm({
+        title: "Approve withdrawal?",
+        body: `Approve ${naira(amount)} to ${ownerName} (${reference})? This sends the Paystack transfer.`,
+        confirmLabel: "Approve & send",
+      });
+      if (!ok) return;
+    } else {
+      const ok = await confirm({
+        title: "Reject withdrawal?",
+        body: `Reject ${naira(amount)} to ${ownerName} (${reference})? The amount returns to their available balance.`,
+        confirmLabel: "Reject",
+        danger: true,
+      });
+      if (!ok) return;
+    }
     try {
       await review.mutateAsync({ action });
     } catch (reason) {
@@ -141,34 +177,34 @@ function WithdrawalSettings() {
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <label>
           Vendor minimum (₦)
-          <input value={form.vendorMin} inputMode="numeric" onChange={(e) => setForm({ ...form, vendorMin: e.target.value })} required />
+          <input className="input" value={form.vendorMin} inputMode="numeric" onChange={(e) => setForm({ ...form, vendorMin: e.target.value })} required />
         </label>
         <label>
           Rider minimum (₦)
-          <input value={form.riderMin} inputMode="numeric" onChange={(e) => setForm({ ...form, riderMin: e.target.value })} required />
+          <input className="input" value={form.riderMin} inputMode="numeric" onChange={(e) => setForm({ ...form, riderMin: e.target.value })} required />
         </label>
         <label>
           Vendor daily limit
-          <input value={form.vendorDaily} inputMode="numeric" onChange={(e) => setForm({ ...form, vendorDaily: e.target.value })} required />
+          <input className="input" value={form.vendorDaily} inputMode="numeric" onChange={(e) => setForm({ ...form, vendorDaily: e.target.value })} required />
         </label>
         <label>
           Rider daily limit
-          <input value={form.riderDaily} inputMode="numeric" onChange={(e) => setForm({ ...form, riderDaily: e.target.value })} required />
+          <input className="input" value={form.riderDaily} inputMode="numeric" onChange={(e) => setForm({ ...form, riderDaily: e.target.value })} required />
         </label>
         <label>
           Transfer fee (₦)
-          <input value={form.fee} inputMode="numeric" onChange={(e) => setForm({ ...form, fee: e.target.value })} required />
+          <input className="input" value={form.fee} inputMode="numeric" onChange={(e) => setForm({ ...form, fee: e.target.value })} required />
         </label>
         <label>
           Fee paid by
-          <select value={form.bearer} onChange={(e) => setForm({ ...form, bearer: e.target.value })}>
+          <select className="input" value={form.bearer} onChange={(e) => setForm({ ...form, bearer: e.target.value })}>
             <option value="USER">Deducted from user</option>
             <option value="SAVORA">Savora absorbs</option>
           </select>
         </label>
         <label>
           Approval mode
-          <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+          <select className="input" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
             <option value="AUTO">Auto-Approve (threshold)</option>
             <option value="MANUAL">Manual-Approve (all)</option>
           </select>
@@ -281,7 +317,7 @@ export default function AdminPayoutsPage() {
             key: "actions",
             header: "Actions",
             align: "right",
-            render: (row) => <WithdrawalActions id={row.id} status={row.status} />,
+            render: (row) => <WithdrawalActions id={row.id} status={row.status} reference={row.reference} amount={row.amount} ownerName={row.ownerName ?? row.ownerType} />,
           },
         ]}
       />
@@ -291,7 +327,7 @@ export default function AdminPayoutsPage() {
         <p className="muted">Computes the unsettled balance (gross − commission − fees − prior payouts).</p>
         <label>
           Vendor
-          <select value={vendorId} onChange={(event) => setVendorId(event.target.value)} required>
+          <select className="input" value={vendorId} onChange={(event) => setVendorId(event.target.value)} required>
             <option value="">Choose a vendor…</option>
             {(vendors.data?.items ?? []).map((vendor) => (
               <option key={vendor.id} value={vendor.id}>

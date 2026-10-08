@@ -104,6 +104,19 @@ export default function Page() {
             </aside>
           </div>
         )}
+        {items.length > 0 && !isLoading ? (
+          <div className="cart-sticky" role="region" aria-label="Checkout summary">
+            <div>
+              <strong>₦{(cart?.subtotal ?? 0).toLocaleString()}</strong>
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+                {cart?.itemCount ?? 0} item{(cart?.itemCount ?? 0) === 1 ? "" : "s"} · delivery added at checkout
+              </p>
+            </div>
+            <Link className="btn" href="/checkout">
+              Checkout
+            </Link>
+          </div>
+        ) : null}
       </section>
     </PageShell>
   );

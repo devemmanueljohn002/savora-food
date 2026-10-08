@@ -15,6 +15,48 @@ import {
 } from "@/lib/api/hooks";
 import type { CheckoutOrderSummary, PaymentVerifyResult } from "@/lib/order-types";
 
+function CheckoutSteps({ current }: { current: 1 | 2 | 3 }) {
+  const steps = ["Details", "Pay", "Done"];
+  return (
+    <ol
+      aria-label="Checkout progress"
+      style={{ display: "flex", gap: 8, listStyle: "none", margin: "0 0 16px", padding: 0 }}
+    >
+      {steps.map((label, index) => {
+        const step = (index + 1) as 1 | 2 | 3;
+        const state = step < current ? "done" : step === current ? "current" : "todo";
+        return (
+          <li
+            key={label}
+            aria-current={step === current ? "step" : undefined}
+            style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 700,
+                background: state === "todo" ? "var(--paper)" : "var(--orange)",
+                color: state === "todo" ? "var(--muted)" : "#fff",
+                border: state === "todo" ? "1px solid var(--line)" : "1px solid var(--orange)",
+              }}
+            >
+              {state === "done" ? "✓" : step}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: state === "current" ? 700 : 400 }}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function CheckoutInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +97,7 @@ function CheckoutInner() {
   if (reference) {
     return (
       <div style={{ maxWidth: 640 }}>
+        <CheckoutSteps current={3} />
         {!verified && !verifyError ? (
           <div className="card card-body">
             <h2>Confirming your payment…</h2>
@@ -147,6 +190,7 @@ function CheckoutInner() {
   if (orders !== null) {
     return (
       <div style={{ maxWidth: 680 }}>
+        <CheckoutSteps current={2} />
         <h2>Pay for your orders</h2>
         <p className="muted">Each vendor is paid separately via secure Paystack checkout.</p>
         {orders.length === 0 ? (
@@ -185,6 +229,7 @@ function CheckoutInner() {
 
   return (
     <div style={{ maxWidth: 900 }}>
+      <CheckoutSteps current={1} />
       <h2>Delivery details</h2>
       <div className="form-card" style={{ marginTop: 16 }}>
         {addresses && addresses.length > 0 && !showNew ? (

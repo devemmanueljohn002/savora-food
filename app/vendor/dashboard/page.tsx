@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
 import RoleGuard from "@/components/RoleGuard";
-import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile } from "@/lib/api/hooks";
+import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp } from "@/lib/api/hooks";
+import PayoutPanel from "@/components/PayoutPanel";
+import { resolvePayoutBankAccount } from "@/lib/savora-api";
 
 export default function VendorDashboardPage() {
   const profile = useVendorProfile();
@@ -11,6 +13,12 @@ export default function VendorDashboardPage() {
   const analytics = useVendorAnalytics();
   const orders = useVendorOrders({ limit: 5 });
   const catering = useVendorCatering();
+  const withdrawals = useVendorWithdrawals();
+  const recipient = useVendorRecipient();
+  const banks = usePayoutBanks();
+  const saveRecipient = useSaveVendorRecipient();
+  const requestWithdrawal = useRequestVendorWithdrawal();
+  const requestOtp = useRequestVendorWithdrawalOtp();
 
   if (profile.isLoading) {
     return (
@@ -138,6 +146,24 @@ export default function VendorDashboardPage() {
           )}
         </div>
       </div>
+
+      <PayoutPanel
+        ownerType="VENDOR"
+        overview={withdrawals.data ?? null}
+        account={recipient.data ?? null}
+        banks={banks.data ?? null}
+        availableKobo={withdrawals.data?.availableKobo ?? 0}
+        pendingKobo={withdrawals.data?.pendingKobo ?? 0}
+        subject="vendor"
+        saving={saveRecipient.isPending}
+        withdrawing={requestWithdrawal.isPending}
+        onResolveAccount={async (input) =>
+          resolvePayoutBankAccount({ account_number: input.accountNumber, bank_code: input.bankCode })
+        }
+        onSaveAccount={(input) => saveRecipient.mutateAsync(input)}
+        onRequestOtp={() => requestOtp.mutateAsync()}
+        onWithdraw={(input) => requestWithdrawal.mutateAsync(input)}
+      />
     </VendorShell>
     </RoleGuard>
   );

@@ -13,8 +13,16 @@ import {
   useRiderEarnings,
   useRiderJobs,
   useRiderProfile,
+  useRiderWithdrawals,
+  useRiderRecipient,
+  usePayoutBanks,
+  useSaveRiderRecipient,
+  useRequestRiderWithdrawal,
+  useRequestRiderWithdrawalOtp,
   useUpdateRiderProfile,
 } from "@/lib/api/hooks";
+import PayoutPanel from "@/components/PayoutPanel";
+import { resolvePayoutBankAccount } from "@/lib/savora-api";
 import { useState } from "react";
 import type { BoardJob } from "@/lib/savora-api";
 
@@ -131,6 +139,12 @@ export default function RiderDashboardPage() {
   // (ACTIVE + is_online FALSE) shows Offline instead of an empty job feed.
   const online = me.isOnline ?? me.status === "ACTIVE";
   const current = (active.data ?? [])[0] ?? null;
+  const withdrawals = useRiderWithdrawals();
+  const recipient = useRiderRecipient();
+  const banks = usePayoutBanks();
+  const saveRecipient = useSaveRiderRecipient();
+  const requestWithdrawal = useRequestRiderWithdrawal();
+  const requestOtp = useRequestRiderWithdrawalOtp();
   const PerformAction = current ? (
     <ActiveDeliveryCard deliveryId={current.id} status={current.status} requireOtp={current.requireOtp ?? false} />
   ) : null;
@@ -286,6 +300,23 @@ export default function RiderDashboardPage() {
           ))}
         </div>
       )}
+      <PayoutPanel
+        ownerType="RIDER"
+        overview={withdrawals.data ?? null}
+        account={recipient.data ?? null}
+        banks={banks.data ?? null}
+        availableKobo={withdrawals.data?.availableKobo ?? 0}
+        pendingKobo={withdrawals.data?.pendingKobo ?? 0}
+        subject="rider"
+        saving={saveRecipient.isPending}
+        withdrawing={requestWithdrawal.isPending}
+        onResolveAccount={async (input) =>
+          resolvePayoutBankAccount({ account_number: input.accountNumber, bank_code: input.bankCode })
+        }
+        onSaveAccount={(input) => saveRecipient.mutateAsync(input)}
+        onRequestOtp={() => requestOtp.mutateAsync()}
+        onWithdraw={(input) => requestWithdrawal.mutateAsync(input)}
+      />
       {error && (
         <p className="auth-error" role="alert" style={{ marginTop: 12 }}>
           {error}

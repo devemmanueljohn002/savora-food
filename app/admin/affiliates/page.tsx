@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AdminShell, AdminSignIn, naira } from "@/components/AdminShell";
 import { Table } from "@/components/ui";
+import { useConfirm } from "@/components/ui/confirm";
 import {
   useAdminAffiliates,
   useAdminPayoutSettings,
@@ -16,9 +17,18 @@ function AffiliateActions({ id, status }: { id: string; status: string }) {
   const [showReason, setShowReason] = useState<"suspend" | "ban" | null>(null);
   const [error, setError] = useState("");
   const update = useUpdateAdminAffiliate(id);
+  const confirm = useConfirm();
 
   async function act(action: "suspend" | "ban" | "reactivate", value?: string) {
     setError("");
+    if (action === "reactivate") {
+      const ok = await confirm({
+        title: "Reactivate affiliate?",
+        body: "Their referral link and code will earn commission again.",
+        confirmLabel: "Reactivate",
+      });
+      if (!ok) return;
+    }
     try {
       await update.mutateAsync({ action, ...(value !== undefined ? { reason: value } : {}) });
       setShowReason(null);
@@ -42,8 +52,10 @@ function AffiliateActions({ id, status }: { id: string; status: string }) {
         {showReason ? (
           <span style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <input
+              className="input"
               value={reason}
               placeholder="Reason (required)"
+              aria-label={`Reason to ${showReason} this affiliate`}
               onChange={(event) => setReason(event.target.value)}
             />
             <button
@@ -141,7 +153,7 @@ function AffiliateCommissionSettings() {
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <label>
           Commission mode
-          <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+          <select className="input" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
             <option value="PERCENT">Percentage of base</option>
             <option value="FLAT">Flat amount per order</option>
           </select>
@@ -149,12 +161,12 @@ function AffiliateCommissionSettings() {
         {form.mode === "PERCENT" ? (
           <label>
             Percentage (%)
-            <input value={form.pct} inputMode="decimal" onChange={(e) => setForm({ ...form, pct: e.target.value })} required />
+            <input className="input" value={form.pct} inputMode="decimal" onChange={(e) => setForm({ ...form, pct: e.target.value })} required />
           </label>
         ) : (
           <label>
             Flat amount per order (₦)
-            <input value={form.flat} inputMode="numeric" onChange={(e) => setForm({ ...form, flat: e.target.value })} required />
+            <input className="input" value={form.flat} inputMode="numeric" onChange={(e) => setForm({ ...form, flat: e.target.value })} required />
           </label>
         )}
         <label>
@@ -167,19 +179,19 @@ function AffiliateCommissionSettings() {
         </label>
         <label>
           Attribution window (days)
-          <input value={form.attributionDays} inputMode="numeric" onChange={(e) => setForm({ ...form, attributionDays: e.target.value })} required />
+          <input className="input" value={form.attributionDays} inputMode="numeric" onChange={(e) => setForm({ ...form, attributionDays: e.target.value })} required />
         </label>
         <label>
           Minimum withdrawal (₦)
-          <input value={form.min} inputMode="numeric" onChange={(e) => setForm({ ...form, min: e.target.value })} required />
+          <input className="input" value={form.min} inputMode="numeric" onChange={(e) => setForm({ ...form, min: e.target.value })} required />
         </label>
         <label>
           Daily withdrawal limit
-          <input value={form.daily} inputMode="numeric" onChange={(e) => setForm({ ...form, daily: e.target.value })} required />
+          <input className="input" value={form.daily} inputMode="numeric" onChange={(e) => setForm({ ...form, daily: e.target.value })} required />
         </label>
         <label>
           Hold after delivery (days)
-          <input value={form.hold} inputMode="numeric" onChange={(e) => setForm({ ...form, hold: e.target.value })} required />
+          <input className="input" value={form.hold} inputMode="numeric" onChange={(e) => setForm({ ...form, hold: e.target.value })} required />
         </label>
       </div>
       {message && <p className="auth-success" role="status">{message}</p>}

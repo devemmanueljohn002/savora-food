@@ -19,19 +19,20 @@ const ROLES: { value: Role; label: string }[] = [
 ];
 
 function GoogleMark() {
+  // Third-party brand colors live as --google-* tokens in globals.css.
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path
-        fill="#4285F4"
+        fill="var(--google-blue)"
         d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.4a5.5 5.5 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.6-5.2 3.6-8.8Z"
       />
       <path
-        fill="#34A853"
+        fill="var(--google-green)"
         d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24Z"
       />
-      <path fill="#FBBC05" d="M5.3 14.3a7.1 7.1 0 0 1 0-4.6v-3h-4a12 12 0 0 0 0 10.7l4-3.1Z" />
+      <path fill="var(--google-yellow)" d="M5.3 14.3a7.1 7.1 0 0 1 0-4.6v-3h-4a12 12 0 0 0 0 10.7l4-3.1Z" />
       <path
-        fill="#EA4335"
+        fill="var(--google-red)"
         d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8Z"
       />
     </svg>
@@ -46,6 +47,8 @@ function AuthCard() {
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "up" ? "up" : "in");
   const [role, setRole] = useState<Role>("customer");
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -215,15 +218,28 @@ function AuthCard() {
               </div>
               <div className="auth-field">
                 <label htmlFor="password">Password</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    style={{ paddingRight: 64 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn ghost btn-sm"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword((v) => !v)}
+                    style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)" }}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
               {notice && (
                 <p className="auth-error" role="alert">
@@ -283,19 +299,32 @@ function AuthCard() {
               </div>
               <div className="auth-field">
                 <label htmlFor="su-password">Password</label>
-                <input
-                  id="su-password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="su-password"
+                    name="password"
+                    type={showSignupPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    style={{ paddingRight: 64 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn ghost btn-sm"
+                    aria-label={showSignupPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showSignupPassword}
+                    onClick={() => setShowSignupPassword((v) => !v)}
+                    style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)" }}
+                  >
+                    {showSignupPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
               {role === "vendor" && (
-                <p className="auth-success" role="note">
+                <p className="auth-success" role="status">
                   Vendor accounts start in review. After signing up you will complete your business profile, and an
                   admin will approve your kitchen before it goes live.
                 </p>
