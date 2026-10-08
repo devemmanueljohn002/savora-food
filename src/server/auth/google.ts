@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { getHomeRouteForRole } from "@/lib/role-routes";
 import { ApiError } from "../errors";
 import { getEnv } from "../env";
 import type { UserRow } from "./store";
@@ -38,18 +39,8 @@ export function sanitizeNext(value: unknown): string | null {
 }
 
 export function roleHome(role: string): string {
-  switch (role) {
-    case "VENDOR":
-      return "/vendor/dashboard";
-    case "DELIVERY_PARTNER":
-      return "/rider/dashboard";
-    case "ADMIN":
-      return "/admin/dashboard";
-    case "SUPER_ADMIN":
-      return "/super-admin/dashboard";
-    default:
-      return "/";
-  }
+  // Single source of truth lives in src/lib/role-routes.ts.
+  return getHomeRouteForRole(role);
 }
 
 export function buildGoogleAuthorizeUrl(next: string | null): string {

@@ -25,13 +25,21 @@ export function parseFilters(params: RawSearchParams): ParsedFilters {
   const max = rawMax ? Number(rawMax) : undefined;
   const rating = rawRating ? Number(rawRating) : undefined;
   return {
-    q: firstValue(params.q)?.trim() || undefined,
-    city: firstValue(params.city)?.trim() || undefined,
-    sort: firstValue(params.sort)?.trim() || undefined,
-    category: firstValue(params.category)?.trim() || undefined,
+    q: clampQuery(firstValue(params.q)?.trim()) || undefined,
+    city: clampQuery(firstValue(params.city)?.trim()) || undefined,
+    sort: clampQuery(firstValue(params.sort)?.trim()) || undefined,
+    category: clampQuery(firstValue(params.category)?.trim()) || undefined,
     vendorId: rawVendor && UUID_PATTERN.test(rawVendor) ? rawVendor : undefined,
     maxPrice: max != null && Number.isFinite(max) && max > 0 ? max : undefined,
     minRating: rating != null && Number.isFinite(rating) && rating > 0 ? rating : undefined,
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
   };
+}
+
+/** Search inputs are capped so SSR paths can't feed unbounded ILIKE scans. */
+export function clampQuery(value: string | undefined, max = 120): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, max);
 }

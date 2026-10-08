@@ -11,9 +11,9 @@ import {
   exchangeGoogleCode,
   fetchGoogleProfile,
   googlePasswordPlaceholder,
-  roleHome,
   sanitizeNext,
 } from "@/server/auth/google";
+import { getDashboardRouteForRole } from "@/lib/role-routes";
 import { ApiError } from "@/server/errors";
 import { db } from "@/server/db";
 
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       return fail(request, "suspended", next);
     }
 
-    const response = NextResponse.redirect(new URL(next ?? roleHome(user.role), request.url));
+    const response = NextResponse.redirect(new URL(next ?? getDashboardRouteForRole(user.role), request.url));
     await startSession(response, user, request);
     return response;
   } catch {

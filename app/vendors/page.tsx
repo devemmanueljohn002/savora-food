@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description: 'Browse trusted kitchens and restaurants on Savora Food.',
   alternates: { canonical: absoluteUrl('/vendors') },
   openGraph: { title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.', url: absoluteUrl('/vendors') },
+  twitter: { card: 'summary_large_image', title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.' },
 };
 
 const VENDOR_SORTS = [

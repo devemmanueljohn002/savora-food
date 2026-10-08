@@ -129,4 +129,5 @@ export type ListVendorsInput = {
   featured?: boolean;
   page?: number;
   limit?: number;
+  minRating?: number;
 };

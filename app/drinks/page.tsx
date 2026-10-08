@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: 'Zobo, chapman, fresh juices and chilled drinks from beverage makers across Nigeria.',
   alternates: { canonical: absoluteUrl('/drinks') },
   openGraph: { title: 'Drinks & beverages delivery in Nigeria', description: 'Zobo, chapman, fresh juices and chilled drinks from beverage makers across Nigeria.', url: absoluteUrl('/drinks') },
+  twitter: { card: 'summary_large_image', title: 'Drinks & beverages delivery in Nigeria', description: 'Zobo, chapman, fresh juices and chilled drinks from beverage makers across Nigeria.' },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {

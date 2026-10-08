@@ -1,0 +1,23 @@
+# Glossary
+
+- **NIN** — National Identification Number (Nigeria). Mentioned in the task brief; **no NIN handling exists in this codebase** (UNVERIFIED beyond grep zero-hits).
+- **BVN** — Bank Verification Number (Nigeria). Same: **no BVN handling exists**; bank ownership is checked via Paystack account-resolve only.
+- **Kobo** — 1/100 of a naira. Paystack amounts and wallet ledgers use integer kobo (`toKobo`, `nairaToKobo` — `orders.ts:433`, `wallet.ts:80`).
+- **₦ / NGN** — Nigerian naira; app currency (`currency NGN`, `src/config/site.ts:5`).
+- **Nuban** — Nigerian Uniform Bank Account Number (10 digits). Payout recipient validation: `/^\d{10}$/` + bank code (`transfers.ts:165`).
+- **Customer (`CUSTOMER`)** — buys food; `proxy.ts`, `guard.ts`.
+- **Vendor (`VENDOR`)** — sells food; profile `PENDING→APPROVED`; `is_open` toggles availability.
+- **Rider / delivery partner (`DELIVERY_PARTNER`)** — delivers; presence `is_online` + `status`; verification gate `APPROVED`.
+- **Admin (`ADMIN`) / Super admin (`SUPER_ADMIN`)** — operate / govern the platform.
+- **Order statuses** — `PENDING_PAYMENT → PAID → VENDOR_ACCEPTED → PREPARING → READY_FOR_PICKUP → RIDER_ASSIGNED → OUT_FOR_DELIVERY → DELIVERED`, with `CANCELLED` exits; `CONFIRMED` legacy-dead; `REFUNDED` unwritten (`order-transitions.ts`).
+- **Delivery statuses** — `OFFERED → ASSIGNED → GOING_TO_VENDOR → ARRIVED_AT_VENDOR → PICKED_UP → IN_TRANSIT → DELIVERED` (+`FAILED/CANCELLED`) (`dispatch.ts`).
+- **Board / open board** — rider self-service job list (`BOARD_STATUSES = PREPARING, READY_FOR_PICKUP`); first-claim wins (`claimBoardJob`).
+- **Handover/OTP code** — 4-digit customer code for pickup/delivery proof; hashed at rest, ≤5 attempts.
+- **Hold / release** — wallet states: earnings held N days then released to `available` (`wallet.ts`).
+- **Cooling** — 24h withdrawal lock after bank-account change.
+- **Settlement** — `order_settlements PAYABLE` row marking vendor share owed.
+- **Quote (catering)** — vendor price response (`catering_quotes`); request `SUBMITTED→QUOTED→BOOKED`.
+- **Coupon** — `PERCENT` (capped 100) or `FIXED` (capped subtotal) discount, optionally vendor-scoped.
+- **Service fee / tax / commission** — platform service fee (default 5%), tax (default 7.5%), vendor commission (default 10%).
+- **CAC** — Corporate Affairs Commission (Nigeria); `vendor_documents` kind `CAC_CERTIFICATE`.
+- **Idempotency key** — client-supplied dedupe key on withdrawals; `event_key` on webhooks.

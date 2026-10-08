@@ -6,3 +6,6 @@ export * from "./modal";
 export * from "./skeleton";
 export * from "./table";
 export * from "./toast";
+export * from "./confirm";
+export * from "./tabs";
+export * from "./empty-error";

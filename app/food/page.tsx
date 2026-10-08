@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.',
   alternates: { canonical: absoluteUrl('/food') },
   openGraph: { title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.', url: absoluteUrl('/food') },
+  twitter: { card: 'summary_large_image', title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.' },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {

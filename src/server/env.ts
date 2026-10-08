@@ -62,7 +62,8 @@ export function getEnv(): Env {
   if (cached) return cached;
 
   const databaseUrl = process.env.DATABASE_URL?.trim();
-  const jwtSecret = process.env.JWT_SECRET?.trim();
+  // Canonical session secret is JWT_SECRET; AUTH_SECRET is a legacy alias.
+  const jwtSecret = process.env.JWT_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is not set. Add it to .env.local (see .env.example).");

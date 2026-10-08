@@ -1,10 +1,12 @@
-import type { HTMLAttributes } from "react";
+"use client";
 
-type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info";
+import { HTMLAttributes, forwardRef } from "react";
 
-export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
+export type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info";
+
+export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
-};
+}
 
 const toneClass: Record<BadgeTone, string> = {
   neutral: "badge",
@@ -14,10 +16,14 @@ const toneClass: Record<BadgeTone, string> = {
   info: "badge badge-info",
 };
 
-export function Badge({ tone = "neutral", className = "", children, ...rest }: BadgeProps) {
-  return (
-    <span className={[toneClass[tone], className].filter(Boolean).join(" ")} {...rest}>
-      {children}
-    </span>
-  );
-}
+export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ tone = "neutral", className = "", children, ...rest }, ref) => {
+    return (
+      <span ref={ref} className={[toneClass[tone], className].filter(Boolean).join(" ")} {...rest}>
+        {children}
+      </span>
+    );
+  },
+);
+
+Badge.displayName = "Badge";

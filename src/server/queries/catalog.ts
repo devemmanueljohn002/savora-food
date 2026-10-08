@@ -152,7 +152,12 @@ export async function listProducts(input: ListProductsInput = {}): Promise<Pagin
   const sql = db();
   const { page, limit, offset } = normalizePage(input.page, input.limit);
 
-  const conditions = [sql`p.is_active = TRUE`, sql`v.status = 'APPROVED'`];
+  const conditions = [
+    sql`p.is_active = TRUE`,
+    sql`v.status = 'APPROVED'`,
+    sql`p.availability = TRUE`,
+    sql`p.stock_quantity > 0`,
+  ];
   if (input.type) conditions.push(sql`p.product_type = ${input.type}`);
   if (input.category) conditions.push(sql`c.slug = ${input.category}`);
   if (input.vendorId) conditions.push(sql`p.vendor_id = ${input.vendorId}`);
@@ -161,7 +166,7 @@ export async function listProducts(input: ListProductsInput = {}): Promise<Pagin
   if (input.minRating != null) conditions.push(sql`p.rating_average >= ${input.minRating}`);
   if (input.city) conditions.push(sql`v.city ILIKE ${"%" + input.city + "%"}`);
   if (input.search) {
-    const term = "%" + input.search + "%";
+    const term = "%" + input.search.slice(0, 120) + "%";
     conditions.push(sql`(p.name ILIKE ${term} OR p.short_description ILIKE ${term} OR p.description ILIKE ${term})`);
   }
 
@@ -237,8 +242,16 @@ export async function listProductReviews(productId: string, limit = 20): Promise
   }));
 }
 
-export async function listCategories(): Promise<CatalogCategory[]> {
+export async function listCategories(search?: string): Promise<CatalogCategory[]> {
   const sql = db();
+  if (search?.trim()) {
+    const term = "%" + search.trim().slice(0, 120) + "%";
+    return sql<CatalogCategory[]>`
+      SELECT id, name, slug FROM categories
+      WHERE is_active = TRUE AND (name ILIKE ${term} OR slug ILIKE ${term})
+      ORDER BY sort_order ASC, name ASC
+    `;
+  }
   return sql<CatalogCategory[]>`
     SELECT id, name, slug FROM categories WHERE is_active = TRUE ORDER BY sort_order ASC, name ASC
   `;
@@ -313,10 +326,11 @@ export async function listVendors(input: ListVendorsInput = {}): Promise<Paginat
   if (input.featured) conditions.push(sql`v.is_featured = TRUE`);
   if (input.city) conditions.push(sql`v.city ILIKE ${"%" + input.city + "%"}`);
   if (input.search) {
-    const term = "%" + input.search + "%";
+    const term = "%" + input.search.slice(0, 120) + "%";
     conditions.push(sql`(v.business_name ILIKE ${term} OR v.description ILIKE ${term})`);
   }
   if (input.category) conditions.push(sql`c.slug = ${input.category}`);
+  if (input.minRating != null) conditions.push(sql`v.rating_average >= ${input.minRating}`);
 
   const where = conditions.reduce((acc, condition) => sql`${acc} AND ${condition}`);
   const orderBy = VENDOR_SORT_SQL[input.sort ?? "rating"] ?? VENDOR_SORT_SQL.rating;
@@ -380,9 +394,14 @@ export async function listVendorCategories(): Promise<CatalogCategory[]> {
   return rows.map((row) => ({ id: row.id, name: row.name, slug: row.slug }));
 }
 
-export async function listCateringPackages(limit = 24): Promise<CateringPackage[]> {
+export async function listCateringPackages(
+  limit = 24,
+  input: { search?: string; city?: string } = {},
+): Promise<CateringPackage[]> {
   const sql = db();
   const safeLimit = Math.min(Math.max(limit, 1), MAX_PAGE_SIZE);
+  const searchTerm = input.search?.trim() ? "%" + input.search.trim().slice(0, 120) + "%" : null;
+  const cityTerm = input.city?.trim() ? "%" + input.city.trim().slice(0, 120) + "%" : null;
   const rows = await sql<
     {
       id: string;
@@ -406,6 +425,8 @@ export async function listCateringPackages(limit = 24): Promise<CateringPackage[
     FROM catering_packages cp
     JOIN vendors v ON v.id = cp.vendor_id
     WHERE cp.is_active = TRUE AND v.status = 'APPROVED'
+      ${searchTerm ? sql`AND (cp.title ILIKE ${searchTerm} OR cp.description ILIKE ${searchTerm})` : sql``}
+      ${cityTerm ? sql`AND v.city ILIKE ${cityTerm}` : sql``}
     ORDER BY cp.created_at DESC
     LIMIT ${safeLimit}
   `;

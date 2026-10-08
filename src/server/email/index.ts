@@ -105,26 +105,47 @@ async function sendViaBrevo(message: EmailMessage, apiKey: string, emailFrom?: s
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
   const { appUrl } = getEnv();
-  const { subject, htmlContent, textContent } = buildResetEmail(resetUrl, RESET_MINUTES, appUrl);
-  await sendEmail({ to, subject, text: textContent, html: htmlContent });
+  try {
+    const { subject, htmlContent, textContent } = buildResetEmail(resetUrl, RESET_MINUTES, appUrl);
+    await sendEmail({ to, subject, text: textContent, html: htmlContent });
+  } catch (error) {
+    // Rendering must never skip the email: fall back to plain text.
+    console.error("[email] reset render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: "Reset your Savora Food password", text: `Reset your password: ${resetUrl}` });
+  }
 }
 
 export async function sendVerificationEmail(to: string, verifyUrl: string): Promise<void> {
   const { appUrl } = getEnv();
-  const built = buildVerifyEmail(verifyUrl, appUrl);
-  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  try {
+    const built = buildVerifyEmail(verifyUrl, appUrl);
+    await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  } catch (error) {
+    console.error("[email] verify render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: "Verify your Savora Food email", text: `Verify your email: ${verifyUrl}` });
+  }
 }
 
 export async function sendVerificationReminderEmail(to: string, verifyUrl: string): Promise<void> {
   const { appUrl } = getEnv();
-  const built = buildVerificationReminderEmail(verifyUrl, appUrl);
-  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  try {
+    const built = buildVerificationReminderEmail(verifyUrl, appUrl);
+    await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  } catch (error) {
+    console.error("[email] verify-reminder render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: "Verify your Savora Food email", text: `Verify your email: ${verifyUrl}` });
+  }
 }
 
 export async function sendPaymentConfirmedEmail(to: string, orderNumber: string, orderId: string, total: number): Promise<void> {
   const { appUrl } = getEnv();
-  const built = buildPaymentConfirmedEmail({ orderNumber, orderId, total, appUrl });
-  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  try {
+    const built = buildPaymentConfirmedEmail({ orderNumber, orderId, total, appUrl });
+    await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  } catch (error) {
+    console.error("[email] payment-confirmed render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: `Payment confirmed for ${orderNumber}`, text: `Payment confirmed for ${orderNumber}.` });
+  }
 }
 
 export async function sendVendorNewOrderEmail(
@@ -132,8 +153,13 @@ export async function sendVendorNewOrderEmail(
   input: Omit<VendorNewOrderInput, "appUrl">,
 ): Promise<void> {
   const { appUrl } = getEnv();
-  const built = buildVendorNewOrderEmail({ ...input, appUrl });
-  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  try {
+    const built = buildVendorNewOrderEmail({ ...input, appUrl });
+    await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  } catch (error) {
+    console.error("[email] vendor-new-order render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: `New order ${input.orderNumber}`, text: `New paid order ${input.orderNumber}. Open ${appUrl}/vendor/orders/${input.orderId} to confirm.` });
+  }
 }
 
 export type OrderDeliveredEmailInput = Omit<
@@ -175,16 +201,21 @@ export async function sendOrderDeliveredEmail(
   } catch {
     // preference unreadable (e.g. migration not yet applied) — send anyway.
   }
-  const built = buildOrderDeliveredEmail({
-    ...input,
-    appUrl,
-    logoUrl: `${appUrl}/savora-logo-wide.png`,
-    rateUrl: `${appUrl}/dashboard?tab=orders`,
-    trackUrl: `${appUrl}/track`,
-    supportUrl: `${appUrl}/contact`,
-    termsUrl: `${appUrl}/terms`,
-    privacyUrl: `${appUrl}/privacy`,
-  });
-  await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  try {
+    const built = buildOrderDeliveredEmail({
+      ...input,
+      appUrl,
+      logoUrl: `${appUrl}/savora-logo-wide.png`,
+      rateUrl: `${appUrl}/dashboard?tab=orders`,
+      trackUrl: `${appUrl}/track`,
+      supportUrl: `${appUrl}/contact`,
+      termsUrl: `${appUrl}/terms`,
+      privacyUrl: `${appUrl}/privacy`,
+    });
+    await sendEmail({ to, subject: built.subject, text: built.textContent, html: built.htmlContent });
+  } catch (error) {
+    console.error("[email] delivered render failed, sending text fallback:", error);
+    await sendEmail({ to, subject: "Your order was delivered", text: "Your Savora Food order was delivered. Enjoy!" });
+  }
   return true;
 }

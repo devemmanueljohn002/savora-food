@@ -2,6 +2,25 @@ import PageShell from "@/components/PageShell";
 import PartnerApply from "@/components/PartnerApply";
 import { Store, Users, Wallet } from "lucide-react";
 
+import type { Metadata } from "next";
+import { absoluteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: "Partner with Savora Food",
+  description: "Join thousands of Nigerian food entrepreneurs and riders earning on Savora Food. Zero setup fee, weekly payouts.",
+  alternates: { canonical: absoluteUrl("/partner") },
+  openGraph: {
+    title: "Partner with Savora Food",
+    description: "Join thousands of Nigerian food entrepreneurs and riders earning on Savora Food. Zero setup fee, weekly payouts.",
+    url: absoluteUrl("/partner"),
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Partner with Savora Food",
+    description: "Join thousands of Nigerian food entrepreneurs and riders earning on Savora Food. Zero setup fee, weekly payouts.",
+  },
+};
+
 const FEATURES = [
   {
     icon: Users,

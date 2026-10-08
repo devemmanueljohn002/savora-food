@@ -1,34 +1,39 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
+import { checkRateLimit, rateLimitedResponse, searchRateLimitKey } from "@/server/rate-limit";
 import { listVendors, type VendorSort } from "@/server/queries/catalog";
 
 const sorts = ["rating", "popular", "name"] as const;
 
 const querySchema = z.object({
-  city: z.string().trim().min(1).optional(),
-  category: z.string().trim().min(1).optional(),
+  city: z.string().trim().min(1).max(120).optional(),
+  category: z.string().trim().min(1).max(120).optional(),
   search: z.string().trim().min(1).max(120).optional(),
   sort: z.enum(sorts).optional(),
   featured: z.coerce.boolean().optional(),
+  minRating: z.coerce.number().min(0).max(5).optional(),
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(48).optional(),
 });
 
 export async function GET(request: NextRequest) {
+  const limit = checkRateLimit(searchRateLimitKey(request));
+  if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
   try {
     const parsed = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) {
       throw ApiError.validation("Invalid vendor query.", parsed.error.flatten().fieldErrors);
     }
 
-    const { city, category, search, sort, featured, page, limit } = parsed.data;
+    const { city, category, search, sort, featured, minRating, page, limit } = parsed.data;
     const result = await listVendors({
       city,
       category,
       search,
       sort: sort as VendorSort | undefined,
       featured,
+      minRating,
       page,
       limit,
     });

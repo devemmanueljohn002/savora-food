@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.",
   alternates: { canonical: absoluteUrl('/about') },
   openGraph: { title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.", url: absoluteUrl('/about') },
+  twitter: { card: 'summary_large_image', title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered." },
 };
 
 export default function Page() {

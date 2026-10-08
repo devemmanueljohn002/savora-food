@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ApiError, ok, toEnvelope } from "@/server/errors";
+import { checkRateLimit, rateLimitedResponse, searchRateLimitKey } from "@/server/rate-limit";
 import { listProducts, type ProductSort, type ProductType } from "@/server/queries/catalog";
 
 const productTypes = ["FOOD", "CAKE", "SNACK", "DRINK", "CATERING"] as const;
@@ -8,24 +9,28 @@ const sorts = ["newest", "rating", "popular", "price_asc", "price_desc"] as cons
 
 const querySchema = z.object({
   type: z.enum(productTypes).optional(),
-  category: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1).max(120).optional(),
   vendor: z.string().uuid().optional(),
-  city: z.string().trim().min(1).optional(),
+  city: z.string().trim().min(1).max(120).optional(),
   search: z.string().trim().min(1).max(120).optional(),
   sort: z.enum(sorts).optional(),
   featured: z.coerce.boolean().optional(),
+  maxPrice: z.coerce.number().positive().optional(),
+  minRating: z.coerce.number().min(0).max(5).optional(),
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(48).optional(),
 });
 
 export async function GET(request: NextRequest) {
+  const limit = checkRateLimit(searchRateLimitKey(request));
+  if (!limit.ok) return rateLimitedResponse(limit.retryAfter);
   try {
     const parsed = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!parsed.success) {
       throw ApiError.validation("Invalid product query.", parsed.error.flatten().fieldErrors);
     }
 
-    const { type, category, vendor, city, search, sort, featured, page, limit } = parsed.data;
+    const { type, category, vendor, city, search, sort, featured, maxPrice, minRating, page, limit } = parsed.data;
     const result = await listProducts({
       type: type as ProductType | undefined,
       category,
@@ -34,6 +39,8 @@ export async function GET(request: NextRequest) {
       search,
       sort: sort as ProductSort | undefined,
       featured,
+      maxPrice,
+      minRating,
       page,
       limit,
     });

@@ -1,21 +1,45 @@
+import Link from "next/link";
 import PageShell from "@/components/PageShell";
 import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CatalogFilters from "@/components/CatalogFilters";
+import { EmptyState } from "@/components/ui";
 import { listProducts, listVendorCities, listVendors } from "@/server/queries/catalog";
 import { firstValue, parseFilters, type RawSearchParams } from "@/lib/catalog-params";
 import type { ProductSort, VendorSort } from "@/lib/catalog-types";
 
+function pageHref(raw: RawSearchParams, page: number): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "page") continue;
+    if (Array.isArray(value)) {
+      if (value[0]) params.set(key, value[0]);
+    } else if (value) {
+      params.set(key, value);
+    }
+  }
+  params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/search?${query}` : "/search";
+}
+
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   const raw = await searchParams;
-  const { q, city, sort, page } = parseFilters(raw);
-  const category = firstValue(raw.category)?.trim() || undefined;
+  const { q, city, sort, page, maxPrice, minRating } = parseFilters(raw);
+  const category = firstValue(raw.category)?.trim().slice(0, 120) || undefined;
 
   const [productResult, vendorResult, cities] = await Promise.all([
-    q
-      ? listProducts({ search: q, category, city, sort: sort as ProductSort | undefined, page, limit: 12 })
-      : listProducts({ category, city, sort: sort as ProductSort | undefined, page, limit: 12 }),
-    q ? listVendors({ search: q, city, sort: sort as VendorSort | undefined, limit: 6 }) : Promise.resolve(null),
+    listProducts({
+      search: q,
+      category,
+      city,
+      maxPrice,
+      minRating,
+      sort: sort as ProductSort | undefined,
+      page,
+      limit: 12,
+    }),
+    q ? listVendors({ search: q, city, minRating, sort: sort as VendorSort | undefined, limit: 6 }) : Promise.resolve(null),
     listVendorCities(),
   ]);
 
@@ -38,10 +62,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
         />
 
         {productResult.items.length === 0 ? (
-          <div className="card card-body">
-            <h2>No products found</h2>
-            <p className="muted">Try a different keyword, city or category.</p>
-          </div>
+          <EmptyState
+            title="No products found"
+            description="Try a different keyword, city or category."
+          />
         ) : (
           <div className="grid">
             {productResult.items.map((item) => (
@@ -51,9 +75,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
         )}
 
         {productResult.totalPages > 1 ? (
-          <p className="muted" style={{ marginTop: 24, textAlign: "center" }}>
-            Page {productResult.page} of {productResult.totalPages}
-          </p>
+          <nav
+            aria-label="Search pages"
+            style={{ marginTop: 24, display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}
+          >
+            {productResult.page > 1 ? (
+              <Link className="btn secondary btn-sm" href={pageHref(raw, productResult.page - 1)}>
+                Previous
+              </Link>
+            ) : null}
+            <p className="muted" style={{ margin: 0 }}>
+              Page {productResult.page} of {productResult.totalPages}
+            </p>
+            {productResult.page < productResult.totalPages ? (
+              <Link className="btn secondary btn-sm" href={pageHref(raw, productResult.page + 1)}>
+                Next
+              </Link>
+            ) : null}
+          </nav>
         ) : null}
 
         {vendorResult && vendorResult.items.length > 0 ? (

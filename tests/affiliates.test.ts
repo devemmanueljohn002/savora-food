@@ -100,7 +100,7 @@ describe("self-referral anti-fraud", () => {  it("blocks by account id", () => {
 
 describe("dispute webhook reference", () => {
   it("finds the original transaction reference in dispute payloads", async () => {
-    const { extractDisputeReference } = await import("../app/api/webhooks/paystack/route");
+    const { extractDisputeReference } = await import("@/server/payments/webhook-helpers");
     expect(extractDisputeReference({ data: { transaction_reference: "SV-ABC" } })).toBe("SV-ABC");
     expect(extractDisputeReference({ data: { transaction: { reference: "SV-XYZ" } } })).toBe("SV-XYZ");
     expect(extractDisputeReference({ data: {} })).toBeNull();

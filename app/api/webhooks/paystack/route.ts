@@ -6,6 +6,7 @@ import {
   verifyPaystackReference,
   verifyWebhookSignature,
 } from "@/server/payments/paystack";
+import { extractDisputeReference } from "@/server/payments/webhook-helpers";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
@@ -51,17 +52,6 @@ function extractTransferFields(payload: Record<string, unknown>): {
     paystackStatus: firstString(data.status) ?? null,
     failureReason: firstString(data.reason) ?? firstString(data.gateway_response) ?? null,
   };
-}
-
-export function extractDisputeReference(payload: Record<string, unknown>): string | null {
-  const data = asRecord(payload.data) ?? {};
-  const transaction = asRecord(data.transaction);
-  return (
-    firstString(data.transaction_reference) ??
-    firstString(data.reference) ??
-    firstString(transaction?.reference) ??
-    extractReference(payload)
-  );
 }
 
 async function handleDisputeEvent(

@@ -1,118 +1,131 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type ConfirmOptions = {
-  title: string;
-  body?: string;
+interface ConfirmState {
+  open: boolean;
+  title?: string;
+  message?: string;
+  body?: string; // legacy alias for message
+  onConfirm: () => void;
+  onClose: () => void;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Orange (default) or red destructive action. */
-  danger?: boolean;
-};
+  variant?: "danger" | "primary" | "warning";
+  danger?: boolean; // legacy alias for variant="danger"
+  loading?: boolean;
+}
 
-type PendingConfirm = ConfirmOptions & { key: number };
+type ConfirmFn = (options: Partial<Omit<ConfirmState, "open">>) => Promise<boolean>;
 
-type ConfirmContextValue = {
-  /** Themed replacement for window.confirm. Resolves true on confirm. */
-  confirm: (options: ConfirmOptions) => Promise<boolean>;
-};
+const ConfirmContext = createContext<ConfirmFn | null>(null);
 
-const ConfirmContext = createContext<ConfirmContextValue | null>(null);
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<ConfirmState>({ open: false, message: "", onConfirm: () => {}, onClose: () => {} });
 
-export function useConfirm(): ConfirmContextValue["confirm"] {
+  const showConfirm: ConfirmFn = (options) => {
+    return new Promise((resolve) => {
+      setState({
+        ...options,
+        open: true,
+        message: options.message ?? options.body,
+        variant: options.danger ? "danger" : options.variant,
+        onConfirm: () => {
+          resolve(true);
+        },
+        onClose: () => {
+          resolve(false);
+        },
+      });
+    });
+  };
+
+  return (
+    <ConfirmContext.Provider value={showConfirm}>
+      {children}
+      {state.open && (
+        <ConfirmDialog
+          open={state.open}
+          onClose={() => setState((prev) => ({ ...prev, open: false }))}
+          onConfirm={() => {
+            state.onConfirm();
+            setState((prev) => ({ ...prev, open: false }));
+          }}
+          title={state.title}
+          message={state.message}
+          confirmLabel={state.confirmLabel}
+          cancelLabel={state.cancelLabel}
+          variant={state.variant}
+          loading={state.loading}
+        />
+      )}
+    </ConfirmContext.Provider>
+  );
+}
+
+export function useConfirm(): ConfirmFn {
   const context = useContext(ConfirmContext);
   if (!context) {
     throw new Error("useConfirm must be used within <ConfirmProvider>");
   }
-  return context.confirm;
+  return context;
 }
 
-export function ConfirmProvider({ children }: { children: ReactNode }) {
-  const [pending, setPending] = useState<PendingConfirm | null>(null);
-  const resolver = useRef<((value: boolean) => void) | null>(null);
-  const keyRef = useRef(1);
-  const cancelRef = useRef<HTMLButtonElement | null>(null);
+// Inline dialog to avoid circular dependency
+function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title = "Confirm action",
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  variant = "primary",
+  loading = false,
+}: ConfirmState) {
+  if (!open) return null;
 
-  const confirm = useCallback((options: ConfirmOptions) => {
-    return new Promise<boolean>((resolve) => {
-      resolver.current = resolve;
-      setPending({ ...options, key: keyRef.current++ });
-    });
-  }, []);
+  const handleConfirm = () => {
+    onConfirm();
+    onClose();
+  };
 
-  const settle = useCallback((value: boolean) => {
-    setPending(null);
-    resolver.current?.(value);
-    resolver.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!pending) return;
-    cancelRef.current?.focus();
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") settle(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [pending, settle]);
+  const handleClose = () => {
+    onClose();
+  };
 
   return (
-    <ConfirmContext.Provider value={{ confirm }}>
-      {children}
-      {pending && (
-        <div className="modal-backdrop" onClick={() => settle(false)}>
-          <div
-            className="modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirm-title"
-            aria-describedby={pending.body ? "confirm-body" : undefined}
-            style={{ maxWidth: 440 }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <h2 className="modal-title" id="confirm-title">
-                {pending.title}
-              </h2>
-            </div>
-            <div className="modal-body">
-              {pending.body && (
-                <p className="muted" id="confirm-body" style={{ marginTop: 0 }}>
-                  {pending.body}
-                </p>
-              )}
-              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button
-                  ref={cancelRef}
-                  type="button"
-                  className="btn secondary"
-                  style={{ minHeight: 44 }}
-                  onClick={() => settle(false)}
-                >
-                  {pending.cancelLabel ?? "Cancel"}
-                </button>
-                <button
-                  type="button"
-                  className={pending.danger ? "btn danger" : "btn"}
-                  style={{ minHeight: 44 }}
-                  onClick={() => settle(true)}
-                >
-                  {pending.confirmLabel ?? "Confirm"}
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="modal-backdrop" role="presentation" onMouseDown={handleClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h3 id="confirm-title" className="modal-title">{title}</h3>
+          <button type="button" className="modal-close" onClick={handleClose} aria-label="Close dialog">
+            &times;
+          </button>
         </div>
-      )}
-    </ConfirmContext.Provider>
+        <div className="modal-body">
+          <p>{message}</p>
+        </div>
+        <div className="modal-footer" style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "16px 22px", borderTop: "1px solid var(--line)" }}>
+          <button type="button" className="btn secondary" onClick={handleClose} disabled={loading}>
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            className={`btn ${variant === "danger" ? "danger" : variant === "warning" ? "danger" : ""}`}
+            onClick={handleConfirm}
+            disabled={loading}
+          >
+            {loading ? <span className="btn-spinner" aria-hidden="true" role="status" /> : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.',
   alternates: { canonical: absoluteUrl('/catering') },
   openGraph: { title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.', url: absoluteUrl('/catering') },
+  twitter: { card: 'summary_large_image', title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.' },
 };
 
 export default async function Page() {

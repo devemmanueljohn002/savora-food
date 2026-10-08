@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers.",
   alternates: { canonical: absoluteUrl('/cakes') },
   openGraph: { title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers.", url: absoluteUrl('/cakes') },
+  twitter: { card: 'summary_large_image', title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers." },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
