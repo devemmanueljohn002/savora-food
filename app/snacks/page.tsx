@@ -6,13 +6,14 @@ import type { ProductSort } from "@/lib/catalog-types";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Snacks & small chops delivery in Nigeria',
   description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.',
   alternates: { canonical: absoluteUrl('/snacks') },
-  openGraph: { title: 'Snacks & small chops delivery in Nigeria', description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.', url: absoluteUrl('/snacks') },
-  twitter: { card: 'summary_large_image', title: 'Snacks & small chops delivery in Nigeria', description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.' },
+  openGraph: { title: 'Snacks & small chops delivery in Nigeria', description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.', url: absoluteUrl('/snacks'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Snacks & small chops delivery in Nigeria', description: 'Puff-puff, spring rolls, chin-chin and bite-sized treats from snack vendors across Nigeria.' },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {

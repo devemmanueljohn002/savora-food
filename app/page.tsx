@@ -8,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import VendorCard from "@/components/VendorCard";
 import CategoryCard from "@/components/CategoryCard";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 import { toJsonLdScript } from "@/lib/safe-json";
 import {
   listCategories,
@@ -76,8 +77,10 @@ export const metadata: Metadata = {
     description:
       "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",
     url: absoluteUrl("/"),
+    ...DEFAULT_OG_IMAGES,
   },
   twitter: {
+    ...DEFAULT_TWITTER_IMAGE,
     title: "Savora Food | Your Food. Your Choice. Delivered.",
     description:
       "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",

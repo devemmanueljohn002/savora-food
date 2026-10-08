@@ -7,13 +7,14 @@ import type { VendorSort } from "@/lib/catalog-types";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Food vendors near you',
   description: 'Browse trusted kitchens and restaurants on Savora Food.',
   alternates: { canonical: absoluteUrl('/vendors') },
-  openGraph: { title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.', url: absoluteUrl('/vendors') },
-  twitter: { card: 'summary_large_image', title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.' },
+  openGraph: { title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.', url: absoluteUrl('/vendors'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Food vendors near you', description: 'Browse trusted kitchens and restaurants on Savora Food.' },
 };
 
 const VENDOR_SORTS = [

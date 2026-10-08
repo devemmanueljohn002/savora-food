@@ -6,13 +6,14 @@ import type { ProductSort } from "@/lib/catalog-types";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Food delivery in Nigeria | Hot freshly cooked meals',
   description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.',
   alternates: { canonical: absoluteUrl('/food') },
-  openGraph: { title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.', url: absoluteUrl('/food') },
-  twitter: { card: 'summary_large_image', title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.' },
+  openGraph: { title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.', url: absoluteUrl('/food'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Food delivery in Nigeria | Hot freshly cooked meals', description: 'Hot, freshly cooked meals from restaurants and home kitchens across Nigeria.' },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {

@@ -1,13 +1,14 @@
 import PageShell from "@/components/PageShell";
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Contact Savora Food support',
   description: 'Get help with orders, vendors, riders and catering bookings.',
   alternates: { canonical: absoluteUrl('/contact') },
-  openGraph: { title: 'Contact Savora Food support', description: 'Get help with orders, vendors, riders and catering bookings.', url: absoluteUrl('/contact') },
-  twitter: { card: 'summary_large_image', title: 'Contact Savora Food support', description: 'Get help with orders, vendors, riders and catering bookings.' },
+  openGraph: { title: 'Contact Savora Food support', description: 'Get help with orders, vendors, riders and catering bookings.', url: absoluteUrl('/contact'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Contact Savora Food support', description: 'Get help with orders, vendors, riders and catering bookings.' },
 };
 
 export default function Page(){return <PageShell><section className="section container"><h1>Contact us</h1><p className="section-sub">We reply to most messages within one business hour.</p><div className="two-col"><form className="form-card"><div className="two-col"><div><label>Full name</label><input/></div><div><label>Email</label><input/></div></div><label>Subject</label><input/><label>Message</label><textarea/><button className="btn">Send message</button></form><div className="form-card"><h3>☎ Phone</h3><p className="muted">+234 800 SAVORA</p><h3>✉ Email</h3><p className="muted">hello@savorafood.ng</p><h3>⌖ Office</h3><p className="muted">18 Adeola Odeku Street, Victoria Island, Lagos</p><p className="muted">Support hours: Monday – Sunday, 8:00 - 22:00 WAT.</p></div></div></section></PageShell>}

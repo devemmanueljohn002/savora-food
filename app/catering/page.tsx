@@ -6,13 +6,14 @@ import heroImage from "@/assets/cat-catering.jpg";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Catering for events in Nigeria',
   description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.',
   alternates: { canonical: absoluteUrl('/catering') },
-  openGraph: { title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.', url: absoluteUrl('/catering') },
-  twitter: { card: 'summary_large_image', title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.' },
+  openGraph: { title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.', url: absoluteUrl('/catering'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Catering for events in Nigeria', description: 'Wedding, corporate and party catering from vetted kitchens. Get a quote in minutes.' },
 };
 
 export default async function Page() {

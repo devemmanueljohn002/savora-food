@@ -6,13 +6,14 @@ import type { ProductSort } from "@/lib/catalog-types";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'Cakes & desserts delivery in Nigeria',
   description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers.",
   alternates: { canonical: absoluteUrl('/cakes') },
-  openGraph: { title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers.", url: absoluteUrl('/cakes') },
-  twitter: { card: 'summary_large_image', title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers." },
+  openGraph: { title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers.", url: absoluteUrl('/cakes'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'Cakes & desserts delivery in Nigeria', description: "Freshly baked birthday cakes, cupcakes and custom designs from Nigeria's best bakers." },
 };
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {

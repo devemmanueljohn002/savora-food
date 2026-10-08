@@ -4,6 +4,7 @@ import { Store, Users, Wallet } from "lucide-react";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Partner with Savora Food",
@@ -13,9 +14,10 @@ export const metadata: Metadata = {
     title: "Partner with Savora Food",
     description: "Join thousands of Nigerian food entrepreneurs and riders earning on Savora Food. Zero setup fee, weekly payouts.",
     url: absoluteUrl("/partner"),
+    ...DEFAULT_OG_IMAGES,
   },
   twitter: {
-    card: "summary_large_image",
+    ...DEFAULT_TWITTER_IMAGE,
     title: "Partner with Savora Food",
     description: "Join thousands of Nigerian food entrepreneurs and riders earning on Savora Food. Zero setup fee, weekly payouts.",
   },

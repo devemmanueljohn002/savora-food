@@ -6,13 +6,14 @@ import heroImage from "@/assets/hero-food.jpg";
 
 import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/site-url";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGE } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: 'About Savora Food',
   description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.",
   alternates: { canonical: absoluteUrl('/about') },
-  openGraph: { title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.", url: absoluteUrl('/about') },
-  twitter: { card: 'summary_large_image', title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered." },
+  openGraph: { title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered.", url: absoluteUrl('/about'), ...DEFAULT_OG_IMAGES },
+  twitter: { ...DEFAULT_TWITTER_IMAGE, title: 'About Savora Food', description: "We're building Nigeria's most loved food marketplace. Your Food. Your Choice. Delivered." },
 };
 
 export default function Page() {
