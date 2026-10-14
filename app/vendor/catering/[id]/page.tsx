@@ -2,8 +2,10 @@
 
 import { FormEvent, use, useState } from "react";
 import Link from "next/link";
+import PageShell from "@/components/PageShell";
 import { useConfirm } from "@/components/ui/confirm";
-import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
+import VendorNav from "@/components/VendorNav";
+import { VendorSignIn, naira } from "@/components/VendorShell";
 import {
   useDeclineVendorCatering,
   useQuoteVendorCatering,
@@ -143,25 +145,25 @@ export default function VendorCateringDetailPage({ params }: { params: Promise<{
 
   if (profile.isLoading) {
     return (
-      <div className="vendor-shell">
-        <div className="vendor-body">
-          <main className="vendor-main">
-            <p className="muted">Loading…</p>
-          </main>
-        </div>
-      </div>
+      <PageShell>
+        <section className="section container">
+          <p className="muted">Loading…</p>
+        </section>
+      </PageShell>
     );
   }
   if (profile.isError || !profile.data) return <VendorSignIn />;
 
   return (
-    <VendorShell profile={profile.data} title="Catering request" sub="Quote or decline this event request.">
-      <div style={{ maxWidth: 900 }}>
+    <PageShell>
+      <section className="section container" style={{ maxWidth: 900 }}>
         <p>
           <Link href="/vendor/catering">← All requests</Link>
         </p>
+        <h1 style={{ marginTop: 0 }}>Catering request</h1>
+        <VendorNav />
         <Detail id={id} />
-      </div>
-    </VendorShell>
+      </section>
+    </PageShell>
   );
 }

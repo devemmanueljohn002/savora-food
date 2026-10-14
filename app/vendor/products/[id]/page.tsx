@@ -2,9 +2,11 @@
 
 import { FormEvent, use, useState } from "react";
 import Link from "next/link";
+import PageShell from "@/components/PageShell";
 import { useConfirm } from "@/components/ui/confirm";
+import VendorNav from "@/components/VendorNav";
 import ProductForm, { productFormToInput, type ProductFormState } from "@/components/ProductForm";
-import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
+import { VendorSignIn, naira } from "@/components/VendorShell";
 import {
   useCreateProductVariant,
   useDeleteProductVariant,
@@ -224,25 +226,25 @@ export default function EditVendorProductPage({ params }: { params: Promise<{ id
 
   if (profile.isLoading) {
     return (
-      <div className="vendor-shell">
-        <div className="vendor-body">
-          <main className="vendor-main">
-            <p className="muted">Loading…</p>
-          </main>
-        </div>
-      </div>
+      <PageShell>
+        <section className="section container">
+          <p className="muted">Loading…</p>
+        </section>
+      </PageShell>
     );
   }
   if (profile.isError || !profile.data) return <VendorSignIn />;
 
   return (
-    <VendorShell profile={profile.data} title="Edit product" sub="Update this item's details, price and stock.">
-      <div style={{ maxWidth: 760 }}>
+    <PageShell>
+      <section className="section container" style={{ maxWidth: 760 }}>
         <p>
           <Link href="/vendor/products">← All products</Link>
         </p>
+        <h1 style={{ marginTop: 0 }}>Edit product</h1>
+        <VendorNav />
         <Editor productId={id} />
-      </div>
-    </VendorShell>
+      </section>
+    </PageShell>
   );
 }

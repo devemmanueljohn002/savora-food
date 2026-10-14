@@ -371,9 +371,7 @@ export default function AuthPage() {
   return (
     <PageShell>
       <Suspense>
-        <div className="auth-split">
-          <AuthCard />
-        </div>
+        <AuthCard />
       </Suspense>
     </PageShell>
   );

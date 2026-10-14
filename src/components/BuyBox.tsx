@@ -7,7 +7,6 @@ export default function BuyBox({ productId, disabled = false }: { productId: str
   const [quantity, setQuantity] = useState(1);
 
   return (
-    <>
     <div className="row" style={{ gap: 12, marginTop: 20, flexWrap: "wrap" }}>
       <div className="quantity" role="group" aria-label="Quantity">
         <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={disabled || quantity <= 1} aria-label="Decrease quantity">
@@ -20,10 +19,5 @@ export default function BuyBox({ productId, disabled = false }: { productId: str
       </div>
       <AddToCart productId={productId} quantity={quantity} label="Add to cart" className="btn" disabled={disabled} />
     </div>
-    {/* Phones: sticky bottom action bar (same quantity + action). */}
-    <div className="sticky-action-bar" role="region" aria-label="Add to cart">
-      <AddToCart productId={productId} quantity={quantity} label={quantity > 1 ? `Add ${quantity} to cart` : "Add to cart"} className="btn" disabled={disabled} />
-    </div>
-    </>
   );
 }

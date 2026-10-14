@@ -45,7 +45,6 @@ export default function VendorPayoutsPage() {
       title="Earnings & payouts"
       sub={`Platform commission: ${earnings.data?.commissionRate ?? "—"}% of settled orders.`}
     >
-      <div className="vendor-payouts">
       {earnings.isLoading ? (
         <p className="muted">Loading earnings…</p>
       ) : earnings.data ? (
@@ -128,7 +127,6 @@ export default function VendorPayoutsPage() {
       ) : (
         <p className="auth-error">Could not load earnings.</p>
       )}
-      </div>
     </VendorShell>
   );
 }

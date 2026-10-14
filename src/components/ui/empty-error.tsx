@@ -9,28 +9,10 @@ export interface EmptyStateProps {
   action?: ReactNode;
   as?: ElementType;
   className?: string;
-  /** Compact one-line variant: small icon + single line, no big card. */
-  compact?: boolean;
 }
 
-export function EmptyState({ icon, title, description, action, as = "div", className = "", compact = false }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, as = "div", className = "" }: EmptyStateProps) {
   const Tag = as;
-  if (compact) {
-    return (
-      <Tag className={["empty-compact", className].filter(Boolean).join(" ")}>
-        {icon && (
-          <span className="empty-compact-ico" aria-hidden="true">
-            {icon}
-          </span>
-        )}
-        <span>
-          {title}
-          {description ? <span className="empty-compact-desc"> — {description}</span> : null}
-        </span>
-        {action}
-      </Tag>
-    );
-  }
   return (
     <Tag className={["empty-state", className].filter(Boolean).join(" ")}>
       {icon && <div className="empty-state-icon" aria-hidden="true">{icon}</div>}

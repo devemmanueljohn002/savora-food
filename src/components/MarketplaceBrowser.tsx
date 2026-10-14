@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
@@ -45,65 +45,17 @@ export default function MarketplaceBrowser({
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  // Bottom sheet (phones) / dialog (tablets): lock scroll + Escape to close.
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open ]);
-
-  const close = () => setOpen(false);
-
   return (
     <div className="market-layout">
-      <div className="market-desktop-side">
-        <CatalogSidebar
-          title={title}
-          basePath={basePath}
-          vendors={vendors}
-          categories={categories}
-          maxPrice={maxPrice}
-          current={current}
-        />
-      </div>
-
-      {open ? (
-        <>
-          <div className="sheet-backdrop" onClick={close} aria-hidden="true" />
-          <div className="sheet" role="dialog" aria-modal="true" aria-label={`Filters for ${title}`}>
-            <div className="sheet-head">
-              <h2 className="sheet-title">Filters</h2>
-              <button type="button" className="sheet-close" onClick={close} aria-label="Close filters">
-                &times;
-              </button>
-            </div>
-            <div className="sheet-body">
-              <CatalogSidebar
-                title={title}
-                basePath={basePath}
-                vendors={vendors}
-                categories={categories}
-                maxPrice={maxPrice}
-                current={current}
-                open
-              />
-            </div>
-            <div className="sheet-foot">
-              <button type="button" className="btn" onClick={close}>
-                Show {total} result{total === 1 ? "" : "s"}
-              </button>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <CatalogSidebar
+        title={title}
+        basePath={basePath}
+        vendors={vendors}
+        categories={categories}
+        maxPrice={maxPrice}
+        current={current}
+        open={open}
+      />
 
       <div>
         <div className="results-bar">

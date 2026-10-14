@@ -14,7 +14,7 @@ import {
   Heart,
   Home,
   Info,
-  MapPin,
+  LayoutDashboard,
   Menu,
   Phone,
   ShoppingCart,
@@ -28,7 +28,7 @@ import {
 import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
 import SignOutButton from "./SignOutButton";
-import { useAddresses, useCurrentUser, useFavorites } from "@/lib/api/hooks";
+import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
 import { getAccountRouteForRole, getDashboardRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
@@ -62,7 +62,6 @@ export default function Header() {
   const [closing, setClosing] = useState(false);
   const drawerId = useId();
   const { data: currentUser } = useCurrentUser();
-  const { data: addresses } = useAddresses();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,14 +117,16 @@ export default function Header() {
   // still loading, fall back to the logged-out destinations (no flicker).
   const accountHref = getAccountRouteForRole(currentUser?.role);
   const dashboardHref = getDashboardRouteForRole(currentUser?.role);
+  // "Profile & Settings" must keep staff in their own area: vendors stay on
+  // the vendor profile, riders on the rider profile — never bounced to the
+  // consumer /account pages.
+  const profileHref =
+    currentUser?.role === "VENDOR"
+      ? "/vendor/profile"
+      : currentUser?.role === "DELIVERY_PARTNER"
+        ? "/rider/profile"
+        : "/account/profile";
   const showConsumerShortcuts = usesConsumerTabs(currentUser?.role);
-  // Delivery city from the shopper's default saved address (real data).
-  const deliveryCity =
-    currentUser
-      ? (addresses?.find((address) => address.isDefault) ?? addresses?.[0])?.city?.trim() || null
-      : null;
-  // The landing hero owns the only search field on "/".
-  const hideSearch = pathname === "/";
 
   useEffect(() => {
     if (!open) return;
@@ -166,6 +167,7 @@ export default function Header() {
         className={active ? "active" : undefined}
         data-status={active ? "active" : undefined}
         aria-current={active ? "page" : undefined}
+        onClick={close}
       >
         <Icon className="hdr-drawer-ico" aria-hidden="true" />
         {label}
@@ -175,7 +177,7 @@ export default function Header() {
   };
 
   return (
-    <header className={`site-header${hideSearch ? " hdr-search-hidden" : ""}`}>
+    <header className="site-header">
       <div className="hdr-bar">
         <button
           ref={menuBtnRef}
@@ -201,26 +203,19 @@ export default function Header() {
           <img src="/savora-logo-wide.png" alt="Savora Food — Your Food. Your Choice. Delivered." />
         </Link>
 
-        {hideSearch ? null : (
-          <div className="hdr-search">
-            <HeaderSearch />
-          </div>
-        )}
-
-        <Link className="hdr-location" href="/search" aria-label="Delivery location">
-          <MapPin className="hdr-ico" aria-hidden="true" />
-          <span>{deliveryCity ?? "Nigeria"}</span>
-        </Link>
+        <div className="hdr-search">
+          <HeaderSearch />
+        </div>
 
         <div className="hdr-actions">
           {showConsumerShortcuts ? (
-            <Link className="hdr-icon-btn hdr-shortcut" href="/dashboard?tab=favorites" aria-label="Favorites">
+            <Link className="hdr-icon-btn" href="/dashboard?tab=favorites" aria-label="Favorites">
               <Heart className="hdr-ico" aria-hidden="true" />
               <FavoriteCount />
             </Link>
           ) : null}
           {showConsumerShortcuts ? (
-            <Link className="hdr-icon-btn hdr-shortcut" href="/cart" aria-label="Cart">
+            <Link className="hdr-icon-btn" href="/cart" aria-label="Cart">
               <ShoppingCart className="hdr-ico" aria-hidden="true" />
               <CartCount />
             </Link>
@@ -231,7 +226,7 @@ export default function Header() {
               href={accountHref}
               aria-label={`Account dashboard (${firstName})`}
             >
-              <User className="hdr-ico" aria-hidden="true" /> {firstName}
+              <LayoutDashboard className="hdr-ico" aria-hidden="true" /> {firstName}
             </Link>
           ) : (
             <Link className="hdr-login" href="/auth">
@@ -301,19 +296,32 @@ export default function Header() {
               <p className="hdr-sec-label" aria-hidden="true">Shop</p>
               {shopLinks.map(renderDrawerRow)}
               <p className="hdr-sec-label" aria-hidden="true">Account</p>
-              {renderDrawerRow({ label: "My Dashboard", href: dashboardHref, icon: Home })}
+              {renderDrawerRow({ label: "My Dashboard", href: dashboardHref, icon: LayoutDashboard })}
               {savoraLinks.map(renderDrawerRow)}
             </nav>
             <div className="hdr-drawer-foot">
               {currentUser ? (
-                <SignOutButton className="hdr-drawer-signout" onClick={close} />
+                <>
+                  <Link
+                    className="hdr-drawer-account"
+                    href={profileHref}
+                    onClick={close}
+                    aria-label={`Profile and settings (${firstName})`}
+                  >
+                    <LayoutDashboard className="hdr-drawer-ico" aria-hidden="true" />
+                    Profile &amp; Settings
+                  </Link>
+                  <div onClick={close}>
+                    <SignOutButton className="hdr-drawer-signout" />
+                  </div>
+                </>
               ) : (
                 <>
-                  <Link className="hdr-drawer-login" href="/auth">
+                  <Link className="hdr-drawer-login" href="/auth" onClick={close}>
                     <User className="hdr-drawer-ico" aria-hidden="true" />
                     Login
                   </Link>
-                  <Link className="hdr-drawer-register" href="/register">
+                  <Link className="hdr-drawer-register" href="/register" onClick={close}>
                     <UserPlus className="hdr-drawer-ico" aria-hidden="true" />
                     Create account
                   </Link>

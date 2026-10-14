@@ -2,7 +2,9 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { VendorShell, VendorSignIn, naira, orderBadge } from "@/components/VendorShell";
+import PageShell from "@/components/PageShell";
+import VendorNav from "@/components/VendorNav";
+import { VendorSignIn, naira, orderBadge } from "@/components/VendorShell";
 import { useAdvanceVendorOrder, useAcceptVendorOrder, useCancelVendorOrder, useRejectVendorOrder, useVendorOrder, useVendorProfile } from "@/lib/api/hooks";
 
 export default function VendorOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,21 +26,23 @@ function Detail({ params }: { params: Promise<{ id: string }> }) {
 
   if (profile.isLoading || order.isLoading) {
     return (
-      <div className="vendor-shell">
-        <div className="vendor-body">
-          <main className="vendor-main">
-            <p className="muted">Loading order…</p>
-          </main>
-        </div>
-      </div>
+      <PageShell>
+        <section className="section container">
+          <p className="muted">Loading order…</p>
+        </section>
+      </PageShell>
     );
   }
   if (profile.isError || !profile.data) return <VendorSignIn />;
   if (order.isError || !order.data) {
     return (
-      <VendorShell profile={profile.data} title="Order not found" sub="This order does not belong to your kitchen.">
-        <Link className="btn secondary" href="/vendor/orders">Back to orders</Link>
-      </VendorShell>
+      <PageShell>
+        <section className="section container">
+          <h1>Order not found</h1>
+          <p className="muted">This order does not belong to your kitchen.</p>
+          <Link className="btn secondary" href="/vendor/orders">Back to orders</Link>
+        </section>
+      </PageShell>
     );
   }
 
@@ -87,20 +91,22 @@ function Detail({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <VendorShell
-      profile={profile.data}
-      title={detail.orderNumber}
-      sub={`${new Date(detail.createdAt).toLocaleString("en-NG")} · ${detail.customer.name ?? "Customer"} · ${detail.customer.phone}`}
-    >
-      <div style={{ maxWidth: 900 }}>
+    <PageShell>
+      <section className="section container">
         <p>
           <Link href="/vendor/orders">← All orders</Link>
         </p>
         <div className="row" style={{ alignItems: "flex-start" }}>
           <div>
-            <span className={`badge ${orderBadge(detail.status)}`}>{detail.status.replaceAll("_", " ")}</span>
+            <h1 style={{ margin: 0 }}>{detail.orderNumber}</h1>
+            <p className="section-sub" style={{ marginTop: 8, marginBottom: 0 }}>
+              {new Date(detail.createdAt).toLocaleString("en-NG")} · {detail.customer.name ?? "Customer"} ·{" "}
+              {detail.customer.phone}
+            </p>
           </div>
+          <span className={`badge ${orderBadge(detail.status)}`}>{detail.status.replaceAll("_", " ")}</span>
         </div>
+        <VendorNav />
 
         <div className="two-col">
           <div>
@@ -285,7 +291,7 @@ function Detail({ params }: { params: Promise<{ id: string }> }) {
             </div>
           </div>
         </div>
-      </div>
-    </VendorShell>
+      </section>
+    </PageShell>
   );
 }
