@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, Star, Timer, Zap, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, Search, Star, Timer, Zap, type LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import HomeHero from "@/components/HomeHero";
 import InvitedBanner from "./InvitedBanner";
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     description:
       "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",
     url: absoluteUrl("/"),
-    images: DEFAULT_OG_IMAGES,
+    images: DEFAULT_OG_IMAGES as any,
   },
   twitter: {
     ...DEFAULT_TWITTER_IMAGE,
