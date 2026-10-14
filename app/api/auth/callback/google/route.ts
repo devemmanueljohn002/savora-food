@@ -138,7 +138,17 @@ export async function GET(request: NextRequest) {
     clearOAuthCookies(response);
     await startSession(response, user, request);
     return response;
-  } catch {
+  } catch (error) {
+    // Logged server-side only (Vercel Runtime Logs): never leaks the OAuth
+    // code, tokens, email or Google sub to the client or the redirect.
+    // Common causes: AUTH_GOOGLE_ID/SECRET missing, APP_URL mismatch with
+    // the Google Console redirect URI, or a DB outage mid-callback.
+    console.error("[auth] google callback failed:", {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as { code?: unknown })?.code ?? undefined,
+      hasCode: params.has("code"),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return fail(request, "failed", next);
   }
 }

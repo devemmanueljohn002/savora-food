@@ -820,6 +820,20 @@ export function updateVendorProfileFull(input: {
   return apiSend<VendorProfile>("/vendor/profile", "PATCH", input).then((result) => result.data);
 }
 
+/** Open/Closed ("Accepting Orders") toggle: PATCH /vendors/me/availability. */
+export type VendorAvailability = {
+  id: string;
+  businessName: string;
+  slug: string;
+  isOpen: boolean;
+};
+
+export function updateVendorAvailability(input: { isOpen: boolean }) {
+  return apiSend<VendorAvailability>("/vendors/me/availability", "PATCH", input).then(
+    (result) => result.data,
+  );
+}
+
 export function uploadImage(file: File) {
   const form = new FormData();
   form.append("file", file);

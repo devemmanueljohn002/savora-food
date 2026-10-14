@@ -89,7 +89,30 @@ ${emailTextLink(verifyUrl, "Button not working? Paste this link into your browse
   };
 }
 
-export function buildOtpEmail(code: string, minutes = 10, appUrl = "https://savora-food.vercel.app"): BuiltEmail {
+/**
+ * Logo origin for emails that carry no link (OTP codes). Never hardcodes a
+ * production domain: prefers the caller's appUrl, then the configured
+ * SITE_URL/APP_URL, then the Vercel production host. An empty string leaves
+ * the shell to omit the logo rather than link a dead domain.
+ */
+function logoOrigin(appUrl: string): string {
+  const candidates = [
+    appUrl,
+    process.env.SITE_URL ?? "",
+    process.env.NEXT_PUBLIC_SITE_URL ?? "",
+    process.env.APP_URL ?? "",
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
+      : "",
+  ];
+  for (const candidate of candidates) {
+    const clean = candidate.trim().replace(/\/+$/, "");
+    if (clean) return clean;
+  }
+  return "";
+}
+
+export function buildOtpEmail(code: string, minutes = 10, appUrl = ""): BuiltEmail {
   const safeCode = esc(code);
   const bodyHtml = `
 ${emailHeadline("Your verification code")}
@@ -106,8 +129,8 @@ ${emailCentered(`This code expires in ${minutes} minutes and can only be used on
   Never share this code with anyone. Savora Food will never ask you for it. Didn't request it? Ignore this email.
 </p>`;
   // The shell needs an absolute origin for the logo; the code itself carries
-  // no link, so the caller may override the default production origin.
-  const origin = (appUrl || "https://savora-food.vercel.app").replace(/\/+$/, "");
+  // no link, so the caller may override the configured origin.
+  const origin = logoOrigin(appUrl);
   return {
     subject: `${code} is your Savora Food code`,
     htmlContent: emailShell({
@@ -126,7 +149,7 @@ ${emailCentered(`This code expires in ${minutes} minutes and can only be used on
   };
 }
 
-export function buildResetEmail(link: string, minutes = 30, appUrl = "https://savora-food.vercel.app"): BuiltEmail {
+export function buildResetEmail(link: string, minutes = 30, appUrl = ""): BuiltEmail {
   const bodyHtml = `
 ${emailHeadline("Reset your password")}
 ${emailCentered("We got a request to reset the password on your Savora Food account. Tap the button below to choose a new one.")}

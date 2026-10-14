@@ -50,13 +50,41 @@ describe("og:image", () => {
       SITE_URL: process.env.SITE_URL,
       NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
       APP_URL: process.env.APP_URL,
+      VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+      VERCEL_URL: process.env.VERCEL_URL,
+    };
+    process.env.SITE_URL = "https://shop.savora.example";
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.APP_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    delete process.env.VERCEL_URL;
+    try {
+      expect(siteUrl()).toBe("https://shop.savora.example");
+      expect(absoluteUrl("/og-image.jpg")).toBe("https://shop.savora.example/og-image.jpg");
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("prefers the Vercel production host over the local fallback, and never a deleted domain", () => {
+    const previous = {
+      SITE_URL: process.env.SITE_URL,
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+      APP_URL: process.env.APP_URL,
+      VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+      VERCEL_URL: process.env.VERCEL_URL,
     };
     delete process.env.SITE_URL;
     delete process.env.NEXT_PUBLIC_SITE_URL;
     delete process.env.APP_URL;
+    delete process.env.VERCEL_URL;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "my-app.vercel.app";
     try {
-      expect(siteUrl()).toBe("https://savora-food.vercel.app");
-      expect(absoluteUrl("/og-image.jpg")).toBe("https://savora-food.vercel.app/og-image.jpg");
+      expect(siteUrl()).toBe("https://my-app.vercel.app");
+      expect(siteUrl()).not.toContain("savora-food.vercel.app");
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];

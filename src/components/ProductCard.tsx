@@ -5,9 +5,10 @@ import FavoriteButton from "./FavoriteButton";
 import ProductImage from "./ProductImage";
 import type { CatalogProduct } from "@/lib/catalog-types";
 
-export default function ProductCard({ item }: { item: CatalogProduct }) {
+export default function ProductCard({ item, orderDisabled = false }: { item: CatalogProduct; orderDisabled?: boolean }) {
   const href = `/product/${item.slug}`;
   const onSale = item.compareAtPrice !== null && item.compareAtPrice > item.price;
+  const closed = orderDisabled || item.vendorOpen === false;
 
   return (
     <article className="product-card">
@@ -17,6 +18,7 @@ export default function ProductCard({ item }: { item: CatalogProduct }) {
         </Link>
         <FavoriteButton productId={item.id} />
         {onSale ? <span className="deal-badge">Deal</span> : null}
+        {closed ? <span className="deal-badge">Closed</span> : null}
       </div>
       <div className="product-card-body">
         <div className="product-card-top">
@@ -36,7 +38,7 @@ export default function ProductCard({ item }: { item: CatalogProduct }) {
               <span className="product-compare">₦{item.compareAtPrice!.toLocaleString()}</span>
             ) : null}
           </div>
-          <AddToCart productId={item.id} label="Add" className="add-btn" icon={<Plus className="add-btn-ico" aria-hidden="true" />} />
+          <AddToCart productId={item.id} label="Add" className="add-btn" icon={<Plus className="add-btn-ico" aria-hidden="true" />} disabled={closed} disabledLabel="Closed" />
         </div>
       </div>
     </article>

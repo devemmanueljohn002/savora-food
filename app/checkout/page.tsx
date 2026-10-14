@@ -173,7 +173,20 @@ function CheckoutInner() {
       });
       setOrders(result.orders);
     } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : "Could not place your order.");
+      // A kitchen can close between browsing and checkout: the server rejects
+      // with 409 VENDOR_CLOSED naming the kitchen. Keep the shopper on
+      // checkout with a plain explanation (their other vendors' items are
+      // untouched) instead of a generic failure.
+      const code =
+        typeof reason === "object" && reason !== null && "code" in reason
+          ? (reason as { code?: string }).code
+          : undefined;
+      const message = reason instanceof Error ? reason.message : "Could not place your order.";
+      setNotice(
+        code === "VENDOR_CLOSED"
+          ? `${message} Remove that kitchen's items from your cart to continue with the rest.`
+          : message,
+      );
     }
   }
 

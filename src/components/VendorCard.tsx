@@ -14,6 +14,7 @@ export default function VendorCard({
 }) {
   const image = vendor.bannerImageUrl ?? vendor.logoUrl ?? FALLBACK_IMAGE;
   const location = [vendor.city, vendor.state].filter(Boolean).join(", ") || "Nigeria";
+  const closed = vendor.isOpen === false;
 
   return (
     <article className="vendor-card">
@@ -25,6 +26,11 @@ export default function VendorCard({
               {vendor.name}
               <BadgeCheck className="vendor-verified" aria-hidden="true" />
             </h3>
+            {closed ? (
+              <p style={{ margin: "4px 0 0" }}>
+                <span className="badge badge-danger">Closed</span>
+              </p>
+            ) : null}
             <p className="vendor-card-desc">
               {vendor.description ?? "Freshly prepared by a trusted vendor."}
             </p>

@@ -658,6 +658,24 @@ export async function quoteCheckout(
     throw ApiError.validation(`Coupon ${coupon.code} only applies to ${coupon.vendorName ?? "a specific kitchen"} — none of your items qualify.`);
   }
 
+  // Same closed-kitchen guard as order creation: the quote must fail with
+  // 409 VENDOR_CLOSED rather than price an order that can never be placed.
+  {
+    const vendorIds = groups.map((group) => group.vendorId);
+    if (vendorIds.length > 0) {
+      const vendorRows = await db()<{ id: string; business_name: string; is_open: boolean | null }[]>`
+        SELECT id, business_name, is_open FROM vendors WHERE id = ANY(${vendorIds})
+      `;
+      const byId = new Map(vendorRows.map((row) => [row.id, row]));
+      for (const group of groups) {
+        const vendor = byId.get(group.vendorId);
+        if (!vendor || vendor.is_open === false) {
+          throw ApiError.vendorClosed(vendor?.business_name ?? group.vendorName);
+        }
+      }
+    }
+  }
+
   const pricing = await getPricingConfig();
   const lines: QuoteLine[] = [];
   for (const group of groups) {
@@ -763,6 +781,23 @@ export async function createOrdersFromCart(
   }
 
   const groups = groupCartByVendor(cart.items);
+
+  // A kitchen can close (Open/Closed toggle) after the shopper filled the
+  // cart: reject with 409 VENDOR_CLOSED so the client can show the "Closed"
+  // state instead of minting PENDING_PAYMENT orders that hold stock.
+  const vendorIds = groups.map((group) => group.vendorId);
+  if (vendorIds.length > 0) {
+    const vendorRows = await sql<{ id: string; business_name: string; is_open: boolean | null }[]>`
+      SELECT id, business_name, is_open FROM vendors WHERE id = ANY(${vendorIds})
+    `;
+    const byId = new Map(vendorRows.map((row) => [row.id, row]));
+    for (const group of groups) {
+      const vendor = byId.get(group.vendorId);
+      if (!vendor || vendor.is_open === false) {
+        throw ApiError.vendorClosed(vendor?.business_name ?? group.vendorName);
+      }
+    }
+  }
 
   let coupon: CouponTerms | undefined;
   if (couponCode?.trim()) {

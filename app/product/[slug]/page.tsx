@@ -92,6 +92,12 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             <Link href={`/vendor/${product.vendorSlug}`}>{product.vendorName}</Link>
             {"　"}
             <span className="pill">{product.availability ? "Available now" : "Unavailable"}</span>
+            {product.vendorOpen === false ? (
+              <>
+                {"　"}
+                <span className="badge badge-danger">Closed · kitchen not accepting orders</span>
+              </>
+            ) : null}
           </p>
           <p className="muted">{product.description ?? product.shortDescription ?? "Freshly prepared and delivered with care."}</p>
           <p className="price" style={{ fontSize: 30, margin: "12px 0 0" }}>₦{product.price.toLocaleString()}</p>
@@ -100,7 +106,12 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
               <del>₦{product.compareAtPrice!.toLocaleString()}</del> was
             </p>
           ) : null}
-          <BuyBox productId={product.id} />
+          <BuyBox productId={product.id} disabled={product.vendorOpen === false} />
+          {product.vendorOpen === false ? (
+            <p className="muted" style={{ marginTop: 8 }}>
+              This kitchen is closed right now — ordering is paused until they reopen.
+            </p>
+          ) : null}
           {product.prepInfo ? (
             <div className="form-card">
               <strong>Preparation</strong>

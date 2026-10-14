@@ -7,7 +7,7 @@
 
 Savora Food is a Nigerian online food marketplace. Customers browse food, cakes, snacks and drinks, order from independent vendors, pay online with Paystack, and get orders delivered by riders. Vendors manage their own menus and receive payouts to their bank accounts. Riders claim delivery jobs from an open board and earn delivery fees. There is also a catering marketplace where customers request quotes for events.
 
-Live deployment target: Vercel (`SITE_URL` default `https://savora-food.vercel.app` — `src/lib/site-url.ts`, `.env.example`).
+Live deployment target: Vercel. `SITE_URL`/`APP_URL` must be set to the stable production domain from the Vercel project settings (`src/lib/site-url.ts`, `.env.example`). (The old `savora-food.vercel.app` deployment was deleted — it must not appear in config or code.)
 
 ## Who the users are
 

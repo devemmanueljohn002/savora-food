@@ -20,6 +20,7 @@ type ErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "VENDOR_CLOSED"
   | "RATE_LIMITED"
   | "PAYMENT_REQUIRED"
   | "PAYMENT_ERROR"
@@ -31,6 +32,10 @@ const httpStatusFor: Record<ErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  // Vendor paused ordering via the Open/Closed toggle: distinct from a
+  // generic CONFLICT so clients can explain ("kitchen is closed") instead of
+  // showing a cryptic conflict message. Still HTTP 409.
+  VENDOR_CLOSED: 409,
   RATE_LIMITED: 429,
   PAYMENT_REQUIRED: 402,
   PAYMENT_ERROR: 422,
@@ -70,6 +75,20 @@ export class ApiError extends Error {
 
   static conflict(message: string): ApiError {
     return new ApiError("CONFLICT", message);
+  }
+
+  /**
+   * Vendor closed its kitchen (Open/Closed toggle) after the shopper loaded
+   * the page. HTTP 409 with code VENDOR_CLOSED so the client can show the
+   * "closed" state instead of a generic error.
+   */
+  static vendorClosed(vendorName?: string): ApiError {
+    return new ApiError(
+      "VENDOR_CLOSED",
+      vendorName
+        ? `${vendorName} is currently closed and not accepting orders. Please try again later.`
+        : "This vendor is currently closed and not accepting orders. Please try again later.",
+    );
   }
 
   static paymentError(message: string): ApiError {

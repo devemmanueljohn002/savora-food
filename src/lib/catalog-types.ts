@@ -18,6 +18,8 @@ export type CatalogProduct = {
   vendorId: string;
   vendorName: string;
   vendorSlug: string;
+  /** Whether the vendor's kitchen is currently accepting orders. */
+  vendorOpen: boolean;
   vendorCity: string | null;
   vendorState: string | null;
   categoryId: string | null;
@@ -47,6 +49,8 @@ export type CatalogVendor = {
   rating: number;
   ratingCount: number;
   isFeatured: boolean;
+  /** Whether the kitchen is currently accepting orders (Open/Closed toggle). */
+  isOpen: boolean;
   categories: string[];
 };
 

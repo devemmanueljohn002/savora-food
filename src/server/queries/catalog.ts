@@ -96,6 +96,7 @@ type ProductRow = {
   vendor_id: string;
   vendor_name: string;
   vendor_slug: string;
+  vendor_open: boolean | null;
   vendor_city: string | null;
   vendor_state: string | null;
   category_id: string | null;
@@ -123,6 +124,7 @@ function mapProduct(row: ProductRow): CatalogProduct {
     vendorId: row.vendor_id,
     vendorName: row.vendor_name,
     vendorSlug: row.vendor_slug,
+    vendorOpen: row.vendor_open ?? true,
     vendorCity: row.vendor_city,
     vendorState: row.vendor_state,
     categoryId: row.category_id,
@@ -136,6 +138,7 @@ const PRODUCT_SELECT = (sql: ReturnType<typeof db>) => sql`
   p.image_url, p.product_type, p.rating_average, p.rating_count, p.is_featured,
   p.availability, p.stock_quantity,
   v.id AS vendor_id, v.business_name AS vendor_name, v.slug AS vendor_slug,
+  v.is_open AS vendor_open,
   v.city AS vendor_city, v.state AS vendor_state,
   c.id AS category_id, c.name AS category_name, c.slug AS category_slug
 `;
@@ -289,6 +292,7 @@ type VendorRow = {
   rating_average: string | number;
   rating_count: string | number;
   is_featured: boolean;
+  is_open: boolean | null;
   categories: unknown;
   total_count?: string | number;
 };
@@ -308,6 +312,7 @@ function mapVendor(row: VendorRow): CatalogVendor {
     rating: toNumber(row.rating_average),
     ratingCount: toNumber(row.rating_count),
     isFeatured: row.is_featured,
+    isOpen: row.is_open ?? true,
     categories: toArray(row.categories),
   };
 }
@@ -338,7 +343,7 @@ export async function listVendors(input: ListVendorsInput = {}): Promise<Paginat
   const rows = await sql<VendorRow[]>`
     SELECT
       v.id, v.slug, v.business_name, v.owner_name, v.description, v.city, v.state, v.address,
-      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured,
+      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured, v.is_open,
       COALESCE(array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL), '{}') AS categories,
       COUNT(*) OVER() AS total_count
     FROM vendors v
@@ -359,7 +364,7 @@ export async function getVendorBySlug(slug: string): Promise<CatalogVendor | nul
   const rows = await sql<VendorRow[]>`
     SELECT
       v.id, v.slug, v.business_name, v.owner_name, v.description, v.city, v.state, v.address,
-      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured,
+      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured, v.is_open,
       COALESCE(array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL), '{}') AS categories
     FROM vendors v
     LEFT JOIN vendor_categories vc ON vc.vendor_id = v.id

@@ -82,6 +82,11 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           sizes="(max-width: 1180px) 96vw, 1180px"
         />
         <h1 style={{ marginTop: 24 }}>{vendor.name}</h1>
+        {vendor.isOpen === false ? (
+          <p style={{ margin: "8px 0 0" }}>
+            <span className="badge badge-danger">Closed · not accepting orders right now</span>
+          </p>
+        ) : null}
         <p className="muted">{vendor.description ?? "Freshly prepared by a trusted vendor."}</p>
         <p className="rating">
           ★ {vendor.rating.toFixed(1)} · {vendor.categories[0] ?? "Marketplace"} · {location}
@@ -89,12 +94,15 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         {vendor.address ? <p className="muted">{vendor.address}</p> : null}
 
         <h2 style={{ marginTop: 32 }}>Available products</h2>
+        {vendor.isOpen === false ? (
+          <p className="muted">This kitchen is closed right now — ordering is paused until they reopen.</p>
+        ) : null}
         {products.items.length === 0 ? (
           <p className="muted">This vendor has no available products right now.</p>
         ) : (
           <div className="grid">
             {products.items.map((product) => (
-              <ProductCard key={product.id} item={product} />
+              <ProductCard key={product.id} item={product} orderDisabled={vendor.isOpen === false} />
             ))}
           </div>
         )}

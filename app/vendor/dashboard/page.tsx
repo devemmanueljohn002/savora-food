@@ -1,11 +1,56 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
 import RoleGuard from "@/components/RoleGuard";
-import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp } from "@/lib/api/hooks";
+import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp, useUpdateVendorAvailability } from "@/lib/api/hooks";
 import PayoutPanel from "@/components/PayoutPanel";
 import { resolvePayoutBankAccount } from "@/lib/savora-api";
+
+/**
+ * Open/Closed ("Accepting Orders") toggle at the top of the vendor
+ * dashboard. Optimistic: the switch flips instantly and rolls back to the
+ * previous state if the PATCH fails, with the error shown inline.
+ */
+function AvailabilityToggle({ isOpen }: { isOpen: boolean }) {
+  const update = useUpdateVendorAvailability();
+  const [error, setError] = useState("");
+
+  async function toggle() {
+    setError("");
+    try {
+      await update.mutateAsync({ isOpen: !isOpen });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not change your status. Try again.");
+    }
+  }
+
+  return (
+    <div className="card card-body" style={{ marginBottom: 20 }} role="status" aria-live="polite">
+      <div className="row">
+        <div>
+          <span className={`badge ${isOpen ? "badge-success" : "badge-danger"}`}>
+            {isOpen ? "Open · Accepting orders" : "Closed · Not accepting orders"}
+          </span>
+          <p className="muted" style={{ margin: "8px 0 0" }}>
+            {isOpen
+              ? "Customers can add your items to cart and check out."
+              : "Ordering is paused — customers see a Closed badge and cannot order until you reopen."}
+          </p>
+        </div>
+        <button className="btn" type="button" disabled={update.isPending} onClick={toggle}>
+          {update.isPending ? "Updating…" : isOpen ? "Close kitchen" : "Open kitchen"}
+        </button>
+      </div>
+      {error && (
+        <p className="auth-error" role="alert" style={{ marginBottom: 0 }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function VendorDashboardPage() {
   const profile = useVendorProfile();
@@ -41,6 +86,7 @@ export default function VendorDashboardPage() {
   return (
     <RoleGuard allow={["VENDOR", "ADMIN"]}>
     <VendorShell profile={profile.data} title={profile.data.businessName} sub="Here is what is happening in your kitchen today.">
+      <AvailabilityToggle key={`availability-${profile.data.id}-${profile.data.isOpen}`} isOpen={profile.data.isOpen ?? true} />
       <div className="hero-stats">
         <div className="stat">
           <b>{earnings.data ? naira(earnings.data.last30Days.gross) : "—"}</b>
