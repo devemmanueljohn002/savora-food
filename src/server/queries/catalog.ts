@@ -1,4 +1,5 @@
 import { db } from "../db";
+import { getAvailabilityMap } from "../availability";
 import type {
   CatalogCategory,
   CatalogLocation,
@@ -124,6 +125,9 @@ function mapProduct(row: ProductRow): CatalogProduct {
     vendorId: row.vendor_id,
     vendorName: row.vendor_name,
     vendorSlug: row.vendor_slug,
+    // Baseline from the toggle; overlaid with the computed schedule
+    // availability by the list/get functions below (same value customers
+    // are gated on at checkout).
     vendorOpen: row.vendor_open ?? true,
     vendorCity: row.vendor_city,
     vendorState: row.vendor_state,
@@ -131,6 +135,34 @@ function mapProduct(row: ProductRow): CatalogProduct {
     categoryName: row.category_name,
     categorySlug: row.category_slug,
   };
+}
+
+/**
+ * Overlays computed schedule availability (override > exception > weekly)
+ * onto already-mapped products. Closed vendors keep their listings — the
+ * flag drives the "Closed" badge and disabled order buttons.
+ */
+async function withProductAvailability(items: CatalogProduct[]): Promise<CatalogProduct[]> {
+  if (items.length === 0) return items;
+  const map = await getAvailabilityMap([...new Set(items.map((item) => item.vendorId))]).catch(() => null);
+  if (!map) return items;
+  return items.map((item) => {
+    const computed = map.get(item.vendorId);
+    return computed ? { ...item, vendorOpen: computed.isOpen } : item;
+  });
+}
+
+/**
+ * Same overlay for vendor listings/cards.
+ */
+async function withVendorAvailability(items: CatalogVendor[]): Promise<CatalogVendor[]> {
+  if (items.length === 0) return items;
+  const map = await getAvailabilityMap([...new Set(items.map((item) => item.id))]).catch(() => null);
+  if (!map) return items;
+  return items.map((item) => {
+    const computed = map.get(item.id);
+    return computed ? { ...item, isOpen: computed.isOpen } : item;
+  });
 }
 
 const PRODUCT_SELECT = (sql: ReturnType<typeof db>) => sql`
@@ -187,7 +219,7 @@ export async function listProducts(input: ListProductsInput = {}): Promise<Pagin
   `;
 
   const total = rows.length ? toNumber(rows[0].total_count) : 0;
-  return paginated(rows.map(mapProduct), total, page, limit);
+  return paginated(await withProductAvailability(rows.map(mapProduct)), total, page, limit);
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {
@@ -211,7 +243,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
   if (row.image_url) images.unshift(row.image_url);
 
   return {
-    ...mapProduct(row),
+    ...(await withProductAvailability([mapProduct(row)]))[0],
     ingredients: toArray(row.ingredients),
     prepInfo: row.prep_info,
     images: Array.from(new Set(images)),
@@ -356,7 +388,7 @@ export async function listVendors(input: ListVendorsInput = {}): Promise<Paginat
   `;
 
   const total = rows.length ? toNumber(rows[0].total_count) : 0;
-  return paginated(rows.map(mapVendor), total, page, limit);
+  return paginated(await withVendorAvailability(rows.map(mapVendor)), total, page, limit);
 }
 
 export async function getVendorBySlug(slug: string): Promise<CatalogVendor | null> {
@@ -373,7 +405,8 @@ export async function getVendorBySlug(slug: string): Promise<CatalogVendor | nul
     GROUP BY v.id
     LIMIT 1
   `;
-  return rows[0] ? mapVendor(rows[0]) : null;
+  if (!rows[0]) return null;
+  return (await withVendorAvailability([mapVendor(rows[0])]))[0];
 }
 
 export async function listVendorCities(): Promise<string[]> {

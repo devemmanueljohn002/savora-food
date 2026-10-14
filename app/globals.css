@@ -773,3 +773,79 @@ body{overflow-x:clip}
 .bank-combo-error .btn{flex:none}
 .bank-combo input:focus{border-color:var(--orange);box-shadow:0 0 0 3px #ff65001a}
 .bank-combo-change:focus-visible,.bank-combo-clear:focus-visible,.bank-combo-option:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ── Vendor schedule (weekly hours + exceptions) ─────────────────────────── */
+.sched-week{display:grid;gap:12px;margin:16px 0 20px}
+.sched-day{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+.sched-day-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sched-toggle{display:flex;align-items:center;gap:10px;font-weight:800;cursor:pointer;min-height:44px}
+.sched-toggle input{width:22px;height:22px;accent-color:var(--orange)}
+.sched-slots{display:grid;gap:12px;margin-top:12px}
+.sched-slot{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+.sched-slot > *{min-width:0}
+.sched-slot label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched-slot input[type="time"]{min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:16px}
+.sched-slot .btn{min-height:44px;min-width:44px}
+.sched-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sched-grid-2 label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched-grid-2 input,.sched-grid-2 select{min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:16px;width:100%}
+.sched-exceptions{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.sched-exception{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+@media(max-width:520px){.sched-grid-2{grid-template-columns:1fr}.sched-slot{grid-template-columns:1fr 1fr}.sched-slot .btn{grid-column:1/-1}}
+
+/* ── Vendor area (vendor-only chrome + dashboard) ──────────────────────────
+   8px grid: gaps/padding in multiples of 8. One card style (.card).
+   Orange is reserved for primary actions (.btn). 44px minimum tap targets. */
+.vendor-shell{min-height:100vh;background:var(--paper)}
+.vendor-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:#fffdfbf2;border-bottom:1px solid var(--line)}
+.vendor-brand{display:flex;align-items:center;gap:8px;min-height:44px}
+.vendor-brand img{height:28px;width:auto}
+.vendor-brand-tag{font-size:12px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.06em}
+.vendor-topbar-right{display:flex;align-items:center;gap:8px}
+.vendor-body{max-width:80rem;margin:0 auto;padding:0 16px 48px}
+.vendor-main{min-width:0;padding:24px 0 0}
+.vendor-page-head{margin:0 0 16px}
+.vendor-page-head h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+.vendor-page-head .muted{margin:0}
+.vendor-shell h2{font-size:20px;line-height:1.3;margin:0}
+.vendor-shell h3{font-size:16px;margin:0}
+.vendor-shell .btn{min-height:44px}
+.vendor-shell .btn-sm{min-height:44px}
+.vendor-tab{display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.vendor-tab-ico{width:18px;height:18px;flex:none}
+.vendor-status{margin-bottom:16px}
+.vendor-status .row{flex-wrap:wrap;row-gap:12px}
+.vendor-status-kitchen{font-size:16px;font-weight:800;margin:0 0 8px;overflow-wrap:anywhere}
+.vendor-kpis{display:grid;gap:16px;grid-template-columns:1fr;margin:16px 0 0}
+.vendor-kpi{display:flex;flex-direction:column;gap:8px;min-width:0}
+.vendor-kpi-label{font-size:13px;font-weight:700;color:var(--muted)}
+.vendor-kpi-value{font-size:24px;font-weight:800;color:var(--ink);overflow-wrap:anywhere}
+.vendor-kpi-empty{font-size:15px;font-weight:700;color:var(--muted)}
+.vendor-grid-2{display:grid;gap:16px;grid-template-columns:1fr;margin-top:16px}
+.vendor-grid-2 .card{margin:0;min-width:0}
+.vendor-grid-2 section + section{margin-top:0}
+.vendor-empty{display:flex;align-items:center;gap:8px;margin:12px 0 0;color:var(--muted);font-size:14px}
+.vendor-empty svg{width:16px;height:16px;flex:none;color:var(--success)}
+.vendor-attention-list{display:grid;gap:12px;margin-top:12px}
+.vendor-attention-row{display:flex;align-items:flex-start;gap:8px}
+.vendor-attention-row svg{width:16px;height:16px;flex:none;margin-top:3px;color:var(--warning)}
+.vendor-attention-row > div{flex:1;min-width:0}
+.vendor-attention-row p{margin:4px 0 0}
+.vendor-attention-row .badge{flex:none}
+.vendor-attention-links{display:flex;gap:16px;margin-top:4px}
+.vendor-attention-links a{color:var(--orange);font-weight:700;min-height:44px;display:inline-flex;align-items:center}
+.vendor-wallet{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+.vendor-wallet > div{display:flex;flex-direction:column;gap:8px;min-width:0}
+.vendor-wallet .vendor-kpi-value{font-size:20px}
+.vendor-withdraw{width:100%;margin-top:16px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.vendor-withdraw svg{width:18px;height:18px;flex:none}
+.vendor-stock-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.vendor-stock-list li{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.vendor-payouts .payout-form-card{max-width:none}
+@media(min-width:768px){.vendor-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1024px){
+  .vendor-body{display:grid;grid-template-columns:232px minmax(0,1fr);gap:24px;align-items:start}
+  .vendor-tabs{flex-direction:column;align-items:stretch;position:sticky;top:77px;overflow:visible;margin:24px 0;padding:0}
+  .vendor-tab{justify-content:flex-start;border-radius:12px}
+  .vendor-grid-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}

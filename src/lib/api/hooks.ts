@@ -18,6 +18,7 @@ import {
   createCateringRequest,
   createSuperAdmin,
   createCheckoutOrders,
+  createScheduleException,
   createProductReview,
   createProductVariant,
   createVendorProduct,
@@ -25,6 +26,7 @@ import {
   declineVendorCatering,
   deleteAddress,
   deleteAdminCoupon,
+  deleteScheduleException,
   deleteProductVariant,
   deleteVendorProduct,
   getAccount,
@@ -65,6 +67,7 @@ import {
   getVendorEarnings,
   getVendorOnboarding,
   getVendorOrder,
+  getVendorSchedule,
   getVendorProduct,
   getProfilePhotoViewUrl,
   getVendorProfile,
@@ -117,6 +120,7 @@ import {
   riderDeliveryAction,
   saveAffiliateRecipient,
   saveVendorRecipient,
+  saveVendorSchedule,
   getVendorRecipient,
   toggleFavorite,
   updateAccount,
@@ -145,10 +149,13 @@ import {
   type AccountOverview,
   type CatalogQuery,
   type CateringRequestInput,
+  type DaySchedule,
   type OrderQuery,
+  type ScheduleSlot,
   type VendorAvailability,
   type VendorOnboardingInput,
   type VendorProfile,
+  type VendorScheduleState,
   type VendorProductInput,
   type VendorQuery,
 } from "@/lib/savora-api";
@@ -1081,6 +1088,60 @@ export function useUpdateVendorAvailability() {
           isOpen: availability.isOpen,
         });
       }
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
+      void queryClient.invalidateQueries({ queryKey: scheduleKeys.state });
+    },
+  });
+}
+
+export const scheduleKeys = {
+  state: ["vendor-schedule"] as const,
+};
+
+export function useVendorSchedule() {
+  return useQuery({
+    queryKey: scheduleKeys.state,
+    queryFn: getVendorSchedule,
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: (data) => livePoll(data),
+  });
+}
+
+export function useSaveVendorSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (days: DaySchedule[]) => saveVendorSchedule(days),
+    onSuccess: (state: VendorScheduleState) => {
+      queryClient.setQueryData(scheduleKeys.state, state);
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
+    },
+  });
+}
+
+export function useCreateScheduleException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      startDate: string;
+      endDate?: string;
+      type: "closed" | "special_hours";
+      slots?: ScheduleSlot[];
+      note?: string;
+    }) => createScheduleException(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: scheduleKeys.state });
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
+    },
+  });
+}
+
+export function useDeleteScheduleException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteScheduleException(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: scheduleKeys.state });
       void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
     },
   });

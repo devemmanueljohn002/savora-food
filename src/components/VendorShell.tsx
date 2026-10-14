@@ -6,6 +6,12 @@ import VendorNav from "@/components/VendorNav";
 import SignOutButton from "@/components/SignOutButton";
 import type { VendorProfile } from "@/lib/savora-api";
 
+/**
+ * Vendor-only shell. Deliberately NOT PageShell: vendor pages show no
+ * customer search bar, no customer nav and no customer bottom tab bar —
+ * just the vendor top bar plus the single vendor nav (scrollable tab bar
+ * on mobile, sticky sidebar on desktop).
+ */
 export function VendorShell({ profile, title, sub, children }: {
   profile: VendorProfile;
   title: string;
@@ -13,30 +19,36 @@ export function VendorShell({ profile, title, sub, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <PageShell>
-      <section className="section container">
-        <div className="row vendor-head" style={{ alignItems: "flex-start", marginBottom: 6 }}>
-          <div>
-            <h1 style={{ margin: 0 }}>{title}</h1>
-            {sub ? <p className="section-sub" style={{ marginTop: 8, marginBottom: 0 }}>{sub}</p> : null}
-          </div>
-          <span style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span className={`badge ${profile.status === "APPROVED" ? "badge-success" : "badge-warning"}`}>
-              {profile.status.replaceAll("_", " ")}
-            </span>
-            <SignOutButton />
+    <div className="vendor-shell">
+      <header className="vendor-topbar">
+        <Link className="vendor-brand" href="/vendor/dashboard" aria-label="Savora Food vendor home">
+          <img src="/savora-logo-wide.png" alt="Savora Food" />
+          <span className="vendor-brand-tag">Vendor</span>
+        </Link>
+        <div className="vendor-topbar-right">
+          <span className={`badge ${profile.status === "APPROVED" ? "badge-success" : "badge-warning"}`}>
+            {profile.status.replaceAll("_", " ")}
           </span>
+          <SignOutButton className="btn secondary btn-sm" />
         </div>
-        {profile.status !== "APPROVED" && (
-          <p className="auth-success" role="note">
-            Your kitchen is under review. Complete your <Link href="/vendor/onboarding">business profile</Link> — an
-            admin will approve it before it goes live.
-          </p>
-        )}
+      </header>
+      <div className="vendor-body">
         <VendorNav />
-        {children}
-      </section>
-    </PageShell>
+        <main className="vendor-main">
+          <div className="vendor-page-head">
+            <h1>{title}</h1>
+            {sub ? <p className="muted">{sub}</p> : null}
+          </div>
+          {profile.status !== "APPROVED" && (
+            <p className="auth-success" role="note">
+              Your kitchen is under review. Complete your <Link href="/vendor/onboarding">business profile</Link> — an
+              admin will approve it before it goes live.
+            </p>
+          )}
+          {children}
+        </main>
+      </div>
+    </div>
   );
 }
 

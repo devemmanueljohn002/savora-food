@@ -83,8 +83,12 @@ export async function PATCH(request: NextRequest) {
 
     // Bank + branding + open-flag fields live outside the shared onboarding updater.
     // isOpen is always a real boolean here (never an untyped null), so the
-    // parameter stays type-safe for Postgres.
+    // parameter stays type-safe for Postgres. Toggling isOpen also maintains
+    // the manual schedule override (close = forced closed, reopen = follow
+    // the schedule again) so both toggles stay consistent.
     const d = parsed.data;
+    const nextOpen = d.isOpen === undefined ? (vendor.is_open ?? true) : d.isOpen;
+    const nextOverride = d.isOpen === undefined ? (vendor.manual_override ?? null) : d.isOpen ? null : "closed";
     const rows = await db()<{
       logo_url: string | null;
       banner_image_url: string | null;
@@ -99,7 +103,8 @@ export async function PATCH(request: NextRequest) {
         bank_name = ${d.bankName === undefined ? vendor.bank_name : d.bankName},
         bank_account_name = ${d.bankAccountName === undefined ? vendor.bank_account_name : d.bankAccountName},
         bank_account_number = ${d.bankAccountNumber === undefined ? vendor.bank_account_number : d.bankAccountNumber},
-        is_open = ${d.isOpen === undefined ? vendor.is_open ?? true : d.isOpen},
+        is_open = ${nextOpen},
+        manual_override = ${nextOverride},
         updated_at = NOW()
       WHERE id = ${vendor.id}
       RETURNING logo_url, banner_image_url, bank_name, bank_account_name, bank_account_number, is_open

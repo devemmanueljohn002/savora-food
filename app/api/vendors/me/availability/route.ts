@@ -11,9 +11,11 @@ const availabilitySchema = z.object({
 
 /**
  * PATCH /vendors/me/availability — vendor-only Open/Closed ("Accepting
- * Orders") toggle. Flips vendors.is_open without touching approval status,
- * profile fields, or anything else. Closed vendors keep their listings but
- * customers cannot add their items to cart or check out (409 VENDOR_CLOSED).
+ * Orders") toggle. Closing sets a manual "closed" override that beats the
+ * weekly schedule and exceptions; reopening clears the override so the
+ * schedule decides again. Approval status, profile fields and everything
+ * else are untouched. Closed vendors keep their listings but customers
+ * cannot add their items to cart or check out (409 VENDOR_CLOSED).
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -31,10 +33,14 @@ export async function PATCH(request: NextRequest) {
       business_name: string;
       slug: string;
       is_open: boolean;
+      manual_override: string | null;
     }[]>`
-      UPDATE vendors SET is_open = ${parsed.data.isOpen}, updated_at = NOW()
+      UPDATE vendors SET
+        is_open = ${parsed.data.isOpen},
+        manual_override = ${parsed.data.isOpen ? null : "closed"},
+        updated_at = NOW()
       WHERE id = ${vendor.id}
-      RETURNING id, business_name, slug, is_open
+      RETURNING id, business_name, slug, is_open, manual_override
     `;
     const updated = rows[0];
     if (!updated) throw ApiError.notFound("No vendor profile found for this account.");
@@ -45,6 +51,7 @@ export async function PATCH(request: NextRequest) {
         businessName: updated.business_name,
         slug: updated.slug,
         isOpen: updated.is_open,
+        manualOverride: updated.manual_override,
       }),
     );
   } catch (error) {

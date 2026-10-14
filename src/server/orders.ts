@@ -6,6 +6,7 @@ import { lookupContact } from "./notify";
 import { sendPaymentConfirmedEmail, sendVendorNewOrderEmail } from "./email";
 import { assertOrderTransition } from "./order-transitions";
 import { assertPurchasable, getCartView } from "./queries/cart";
+import { assertVendorsAccepting } from "./availability";
 import type {
   CheckoutOrderSummary,
   CheckoutResult,
@@ -660,21 +661,8 @@ export async function quoteCheckout(
 
   // Same closed-kitchen guard as order creation: the quote must fail with
   // 409 VENDOR_CLOSED rather than price an order that can never be placed.
-  {
-    const vendorIds = groups.map((group) => group.vendorId);
-    if (vendorIds.length > 0) {
-      const vendorRows = await db()<{ id: string; business_name: string; is_open: boolean | null }[]>`
-        SELECT id, business_name, is_open FROM vendors WHERE id = ANY(${vendorIds})
-      `;
-      const byId = new Map(vendorRows.map((row) => [row.id, row]));
-      for (const group of groups) {
-        const vendor = byId.get(group.vendorId);
-        if (!vendor || vendor.is_open === false) {
-          throw ApiError.vendorClosed(vendor?.business_name ?? group.vendorName);
-        }
-      }
-    }
-  }
+  // Uses the computed schedule availability (override > exception > weekly).
+  await assertVendorsAccepting(groups.map((group) => group.vendorId));
 
   const pricing = await getPricingConfig();
   const lines: QuoteLine[] = [];
@@ -782,22 +770,11 @@ export async function createOrdersFromCart(
 
   const groups = groupCartByVendor(cart.items);
 
-  // A kitchen can close (Open/Closed toggle) after the shopper filled the
+  // A kitchen can close (toggle or schedule) after the shopper filled the
   // cart: reject with 409 VENDOR_CLOSED so the client can show the "Closed"
   // state instead of minting PENDING_PAYMENT orders that hold stock.
-  const vendorIds = groups.map((group) => group.vendorId);
-  if (vendorIds.length > 0) {
-    const vendorRows = await sql<{ id: string; business_name: string; is_open: boolean | null }[]>`
-      SELECT id, business_name, is_open FROM vendors WHERE id = ANY(${vendorIds})
-    `;
-    const byId = new Map(vendorRows.map((row) => [row.id, row]));
-    for (const group of groups) {
-      const vendor = byId.get(group.vendorId);
-      if (!vendor || vendor.is_open === false) {
-        throw ApiError.vendorClosed(vendor?.business_name ?? group.vendorName);
-      }
-    }
-  }
+  // Computed live from override > exception > weekly schedule.
+  await assertVendorsAccepting(groups.map((group) => group.vendorId));
 
   let coupon: CouponTerms | undefined;
   if (couponCode?.trim()) {

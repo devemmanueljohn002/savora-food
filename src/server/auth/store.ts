@@ -413,6 +413,8 @@ export type VendorRow = {
   bank_account_name: string | null;
   bank_account_number: string | null;
   is_open: boolean | null;
+  /** Manual availability override: NULL = follow schedule, 'closed'/'open' = forced. */
+  manual_override: string | null;
   status: string;
   commission_rate: string | null;
   rating_average: string | null;

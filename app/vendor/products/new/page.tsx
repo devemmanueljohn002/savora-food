@@ -3,10 +3,8 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import PageShell from "@/components/PageShell";
-import VendorNav from "@/components/VendorNav";
 import ProductForm, { EMPTY_PRODUCT_FORM, productFormToInput, type ProductFormState } from "@/components/ProductForm";
-import { VendorSignIn } from "@/components/VendorShell";
+import { VendorShell, VendorSignIn } from "@/components/VendorShell";
 import { useCreateVendorProduct, useVendorProfile } from "@/lib/api/hooks";
 
 export default function NewVendorProductPage() {
@@ -18,11 +16,13 @@ export default function NewVendorProductPage() {
 
   if (profile.isLoading) {
     return (
-      <PageShell>
-        <section className="section container">
-          <p className="muted">Loading…</p>
-        </section>
-      </PageShell>
+      <div className="vendor-shell">
+        <div className="vendor-body">
+          <main className="vendor-main">
+            <p className="muted">Loading…</p>
+          </main>
+        </div>
+      </div>
     );
   }
   if (profile.isError || !profile.data) return <VendorSignIn />;
@@ -39,14 +39,15 @@ export default function NewVendorProductPage() {
   }
 
   return (
-    <PageShell>
-      <section className="section container" style={{ maxWidth: 760 }}>
+    <VendorShell
+      profile={profile.data}
+      title="Add product"
+      sub="It appears in the marketplace immediately while visible and active."
+    >
+      <div style={{ maxWidth: 760 }}>
         <p>
           <Link href="/vendor/products">← All products</Link>
         </p>
-        <h1 style={{ marginTop: 0 }}>Add product</h1>
-        <p className="section-sub">It appears in the marketplace immediately while visible and active.</p>
-        <VendorNav />
         <ProductForm
           form={form}
           setForm={setForm}
@@ -55,7 +56,7 @@ export default function NewVendorProductPage() {
           error={error}
           submitLabel="Create product"
         />
-      </section>
-    </PageShell>
+      </div>
+    </VendorShell>
   );
 }

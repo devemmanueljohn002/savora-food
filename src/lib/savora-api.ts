@@ -826,10 +826,64 @@ export type VendorAvailability = {
   businessName: string;
   slug: string;
   isOpen: boolean;
+  manualOverride?: "open" | "closed" | null;
 };
 
 export function updateVendorAvailability(input: { isOpen: boolean }) {
   return apiSend<VendorAvailability>("/vendors/me/availability", "PATCH", input).then(
+    (result) => result.data,
+  );
+}
+
+// ── Availability schedule ─────────────────────────────────────────────────
+
+export type ScheduleSlot = { open: string; close: string };
+
+export type DaySchedule = { dayOfWeek: number; slots: ScheduleSlot[]; enabled: boolean };
+
+export type ScheduleException = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  type: "closed" | "special_hours";
+  slots: ScheduleSlot[] | null;
+  note: string | null;
+};
+
+/** Weekly hours + exceptions + the live computed status (matches checkout gating). */
+export type VendorScheduleState = {
+  manualOverride: "open" | "closed" | null;
+  isOpen: boolean;
+  nextChange: string | null;
+  reason: "manual" | "exception" | "schedule" | "default";
+  /** True once the vendor has saved hours at least once. */
+  hasSchedule: boolean;
+  days: DaySchedule[];
+  exceptions: ScheduleException[];
+};
+
+export function getVendorSchedule() {
+  return apiGet<VendorScheduleState>("/vendors/me/schedule").then((result) => result.data);
+}
+
+export function saveVendorSchedule(days: DaySchedule[]) {
+  return apiSend<VendorScheduleState>("/vendors/me/schedule", "PUT", { days }).then((result) => result.data);
+}
+
+export function createScheduleException(input: {
+  startDate: string;
+  endDate?: string;
+  type: "closed" | "special_hours";
+  slots?: ScheduleSlot[];
+  note?: string;
+}) {
+  return apiSend<ScheduleException>("/vendors/me/schedule/exceptions", "POST", input).then(
+    (result) => result.data,
+  );
+}
+
+export function deleteScheduleException(id: string) {
+  return apiSend<{ deleted: boolean }>(`/vendors/me/schedule/exceptions/${encodeURIComponent(id)}`, "DELETE").then(
     (result) => result.data,
   );
 }
