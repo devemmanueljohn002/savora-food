@@ -773,3 +773,55 @@ body{overflow-x:clip}
 .bank-combo-error .btn{flex:none}
 .bank-combo input:focus{border-color:var(--orange);box-shadow:0 0 0 3px #ff65001a}
 .bank-combo-change:focus-visible,.bank-combo-clear:focus-visible,.bank-combo-option:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ── Vendor Schedule (restyled to match app design) ────────────────────────── */
+.sched-week{display:grid;gap:12px;margin:16px 0 20px}
+.sched-day{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.sched-day-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sched-toggle{display:flex;align-items:center;gap:10px;font-weight:800;cursor:pointer;min-height:var(--tap)}
+.sched-toggle input{width:22px;height:22px;accent-color:var(--orange)}
+.sched-slots{display:grid;gap:12px}
+.sched-slot{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+.sched-slot > *{min-width:0}
+.sched-slot label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched-slot input[type="time"]{min-height:var(--tap);padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff;font-size:16px}
+.sched-slot .btn{min-height:var(--tap);min-width:var(--tap)}
+.sched-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sched-grid-2 label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched-grid-2 input,.sched-grid-2 select{min-height:var(--tap);padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff;font-size:16px;width:100%}
+.sched-exceptions{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.sched-exception{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;flex-wrap:wrap}
+.sched-exception > div{flex:1;min-width:0}
+.sched-exception strong{font-weight:700}
+.sched-exception .badge{flex:none}
+.sched-exception .muted{font-size:13px;margin-top:4px}
+.sched-exception .badge{border-radius:999px;font-size:12px;font-weight:700;padding:4px 10px}
+@media(max-width:520px){
+  .sched-grid-2{grid-template-columns:1fr}
+  .sched-slot{grid-template-columns:1fr 1fr}
+  .sched-slot .btn{grid-column:1/-1}
+  .sched-exception{flex-direction:column;align-items:stretch}
+  .sched-exception > div{width:100%}
+}
+.sched-slots > .btn{width:100%;margin-top:8px}
+.sched-toggle input{width:22px;height:22px;accent-color:var(--orange);flex:none}
+.sched-day{transition:box-shadow .15s}
+.sched-day:hover{box-shadow:0 8px 24px #6b4b2b1f}
+.sched-day:has(input:focus-visible){outline:2px solid var(--orange);outline-offset:2px}
+
+/* Focus states for accessibility */
+.sched-slot input:focus-visible,
+.sched-grid-2 input:focus-visible,
+.sched-grid-2 select:focus-visible,
+.sched-week button:focus-visible,
+.sched-slots button:focus-visible,
+.sched-exception button:focus-visible{
+  outline:2px solid var(--orange);
+  outline-offset:2px;
+}
+
+/* Touch targets */
+.sched-day-head,.sched-slot,.sched-grid-2 label,.sched-grid-2 input,.sched-grid-2 select,
+.sched-week button,.sched-slots button,.sched-exception button{
+  min-height:var(--tap);
+}
