@@ -619,7 +619,7 @@ function DashboardBody() {
 
   return (
     <PageShell>
-      <section className="section container">
+      <section className="section dash-container">
         {affiliateProfile.data ? (
           <AccountTypeSwitcher isAffiliate />
         ) : (
@@ -644,6 +644,8 @@ function DashboardBody() {
           </div>
         </div>
 
+        {/* Customer account: left tab menu + content on desktop, stacked on mobile. */}
+        <div className="dash-layout">
         <div className="dash-tabs" role="tablist" aria-label="Dashboard">
           {TABS.map((value) => (
             <button
@@ -659,12 +661,15 @@ function DashboardBody() {
           ))}
         </div>
 
+        <div className="account-content">
         {tab === "overview" && <OverviewTab />}
         {tab === "orders" && <OrdersTab />}
         {tab === "catering" && <CateringTab />}
         {tab === "favorites" && <FavoritesTab />}
         {tab === "notifications" && <NotificationsTab />}
         {tab === "profile" && <ProfileTab />}
+        </div>
+        </div>
       </section>
     </PageShell>
   );

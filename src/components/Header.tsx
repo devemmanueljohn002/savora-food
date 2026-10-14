@@ -15,6 +15,7 @@ import {
   Home,
   Info,
   LayoutDashboard,
+  MapPin,
   Menu,
   Phone,
   ShoppingCart,
@@ -28,7 +29,7 @@ import {
 import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
 import SignOutButton from "./SignOutButton";
-import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
+import { useAddresses, useCurrentUser, useFavorites } from "@/lib/api/hooks";
 import { getAccountRouteForRole, getDashboardRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
@@ -62,6 +63,7 @@ export default function Header() {
   const [closing, setClosing] = useState(false);
   const drawerId = useId();
   const { data: currentUser } = useCurrentUser();
+  const { data: addresses } = useAddresses();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -127,6 +129,13 @@ export default function Header() {
         ? "/rider/profile"
         : "/account/profile";
   const showConsumerShortcuts = usesConsumerTabs(currentUser?.role);
+  // Delivery city from the shopper's default saved address (real data).
+  const deliveryCity =
+    currentUser
+      ? (addresses?.find((address) => address.isDefault) ?? addresses?.[0])?.city?.trim() || null
+      : null;
+  // The landing hero owns the only search field on "/".
+  const hideSearch = pathname === "/";
 
   useEffect(() => {
     if (!open) return;
@@ -177,7 +186,7 @@ export default function Header() {
   };
 
   return (
-    <header className="site-header">
+    <header className={`site-header${hideSearch ? " hdr-search-hidden" : ""}`}>
       <div className="hdr-bar">
         <button
           ref={menuBtnRef}
@@ -203,19 +212,26 @@ export default function Header() {
           <img src="/savora-logo-wide.png" alt="Savora Food — Your Food. Your Choice. Delivered." />
         </Link>
 
-        <div className="hdr-search">
-          <HeaderSearch />
-        </div>
+        {hideSearch ? null : (
+          <div className="hdr-search">
+            <HeaderSearch />
+          </div>
+        )}
+
+        <Link className="hdr-location" href="/search" aria-label="Delivery location">
+          <MapPin className="hdr-ico" aria-hidden="true" />
+          <span>{deliveryCity ?? "Nigeria"}</span>
+        </Link>
 
         <div className="hdr-actions">
           {showConsumerShortcuts ? (
-            <Link className="hdr-icon-btn" href="/dashboard?tab=favorites" aria-label="Favorites">
+            <Link className="hdr-icon-btn hdr-shortcut" href="/dashboard?tab=favorites" aria-label="Favorites">
               <Heart className="hdr-ico" aria-hidden="true" />
               <FavoriteCount />
             </Link>
           ) : null}
           {showConsumerShortcuts ? (
-            <Link className="hdr-icon-btn" href="/cart" aria-label="Cart">
+            <Link className="hdr-icon-btn hdr-shortcut" href="/cart" aria-label="Cart">
               <ShoppingCart className="hdr-ico" aria-hidden="true" />
               <CartCount />
             </Link>
@@ -301,20 +317,7 @@ export default function Header() {
             </nav>
             <div className="hdr-drawer-foot">
               {currentUser ? (
-                <>
-                  <Link
-                    className="hdr-drawer-account"
-                    href={profileHref}
-                    onClick={close}
-                    aria-label={`Profile and settings (${firstName})`}
-                  >
-                    <LayoutDashboard className="hdr-drawer-ico" aria-hidden="true" />
-                    Profile &amp; Settings
-                  </Link>
-                  <div onClick={close}>
-                    <SignOutButton className="hdr-drawer-signout" />
-                  </div>
-                </>
+                <SignOutButton className="hdr-drawer-signout" onClick={close} />
               ) : (
                 <>
                   <Link className="hdr-drawer-login" href="/auth" onClick={close}>

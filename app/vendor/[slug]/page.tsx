@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import ProductCard from "@/components/ProductCard";
+import VendorCartSummary from "@/components/VendorCartSummary";
 import { getVendorBySlug, listProducts } from "@/server/queries/catalog";
 import { absoluteUrl } from "@/lib/site-url";
 import { toJsonLdScript } from "@/lib/safe-json";
@@ -68,20 +68,40 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
       : {}),
   };
 
+  // Group menu items by category for the sticky category nav + sections.
+  const groups = new Map<string, { name: string; slug: string; items: typeof products.items }>();
+  for (const product of products.items) {
+    const key = product.categorySlug ?? "all";
+    const entry = groups.get(key) ?? {
+      name: product.categoryName ?? "Menu",
+      slug: (product.categorySlug ?? "menu").replace(/[^a-z0-9-]/gi, "").toLowerCase() || "menu",
+      items: [],
+    };
+    entry.items.push(product);
+    groups.set(key, entry);
+  }
+  const menuGroups = [...groups.values()];
+  const showGroups = menuGroups.length > 1;
+
   return (
     <PageShell>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdScript(restaurantJsonLd) }} />
+      {/* Header banner */}
+      <div
+        className="banner"
+        role="img"
+        aria-label={`${vendor.name} kitchen banner`}
+        style={{
+          backgroundImage: `linear-gradient(90deg,#2d1709bb,#2d170944),url('${vendor.bannerImageUrl ?? vendor.logoUrl ?? FALLBACK_IMAGE}')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="container">
+          <h1>{vendor.name}</h1>
+        </div>
+      </div>
       <section className="section container">
-        <Image
-          className="hero-img"
-          src={vendor.bannerImageUrl ?? vendor.logoUrl ?? FALLBACK_IMAGE}
-          alt={`${vendor.name}${location !== "Nigeria" ? ` in ${location}` : ""} — order online on Savora Food`}
-          width={1600}
-          height={900}
-          priority
-          sizes="(max-width: 1180px) 96vw, 1180px"
-        />
-        <h1 style={{ marginTop: 24 }}>{vendor.name}</h1>
         {vendor.isOpen === false ? (
           <p style={{ margin: "8px 0 0" }}>
             <span className="badge badge-danger">Closed · not accepting orders right now</span>
@@ -100,10 +120,42 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         {products.items.length === 0 ? (
           <p className="muted">This vendor has no available products right now.</p>
         ) : (
-          <div className="grid">
-            {products.items.map((product) => (
-              <ProductCard key={product.id} item={product} orderDisabled={vendor.isOpen === false} />
-            ))}
+          <div className="vendor-menu-layout" style={{ marginTop: 20 }}>
+            {/* Sticky category list (left on desktop, scroll chips on mobile). */}
+            {showGroups ? (
+              <nav className="vendor-menu-cats" aria-label="Menu categories">
+                {menuGroups.map((group) => (
+                  <a key={group.slug} className="vendor-menu-cat" href={`#menu-${group.slug}`}>
+                    {group.name} ({group.items.length})
+                  </a>
+                ))}
+              </nav>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+            {/* Items in 2 columns on desktop, single column on phones. */}
+            <div style={{ minWidth: 0 }}>
+              {showGroups ? (
+                menuGroups.map((group) => (
+                  <section key={group.slug} id={`menu-${group.slug}`} style={{ scrollMarginTop: 90, marginBottom: 28 }}>
+                    <h3 style={{ margin: "0 0 12px" }}>{group.name}</h3>
+                    <div className="vendor-menu-items">
+                      {group.items.map((product) => (
+                        <ProductCard key={product.id} item={product} orderDisabled={vendor.isOpen === false} />
+                      ))}
+                    </div>
+                  </section>
+                ))
+              ) : (
+                <div className="vendor-menu-items">
+                  {products.items.map((product) => (
+                    <ProductCard key={product.id} item={product} orderDisabled={vendor.isOpen === false} />
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Sticky cart summary (right on desktop). */}
+            <VendorCartSummary vendorName={vendor.name} />
           </div>
         )}
       </section>

@@ -44,7 +44,7 @@ export function AdminShell({ title, sub, children }: {
 }) {
   return (
     <PageShell>
-      <section className="section container">
+      <section className="section dash-container">
         <div className="row" style={{ alignItems: "flex-start", marginBottom: 6 }}>
           <div>
             <h1 style={{ margin: "0 0 6px" }}>{title}</h1>
@@ -52,8 +52,11 @@ export function AdminShell({ title, sub, children }: {
           </div>
           <SignOutButton />
         </div>
-        <AdminNav />
-        {children}
+        {/* 220px sidebar on desktop, scrollable tabs + bottom nav on smaller screens. */}
+        <div className="admin-layout">
+          <AdminNav />
+          <div className="admin-content">{children}</div>
+        </div>
       </section>
     </PageShell>
   );

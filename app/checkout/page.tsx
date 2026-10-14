@@ -241,7 +241,8 @@ function CheckoutInner() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div className="checkout-layout">
+      <div style={{ minWidth: 0 }}>
       <CheckoutSteps current={1} />
       <h2>Delivery details</h2>
       <div className="form-card" style={{ marginTop: 16 }}>
@@ -297,8 +298,9 @@ function CheckoutInner() {
           placeholder="Gate code, landmark, preferred time…"
         />
       </div>
+      </div>
 
-      <div className="form-card summary" style={{ marginTop: 16 }}>
+      <aside className="checkout-summary" aria-label="Order summary">
         <h2>Order summary</h2>
         <p className="row"><span>Items</span><span>{cart?.itemCount ?? 0}</span></p>
         <p className="row"><span>Vendors</span><span>{cart?.vendorCount ?? 0}</span></p>
@@ -405,9 +407,25 @@ function CheckoutInner() {
         >
           {checkout.isPending ? "Creating orders…" : "Place order & continue to payment"}
         </button>
-      </div>
+      </aside>
 
       {notice ? <p className="muted" role="alert" style={{ marginTop: 12 }}>{notice}</p> : null}
+
+      {/* Phones: sticky bottom checkout action. */}
+      <div className="sticky-action-bar" role="region" aria-label="Place order">
+        <button
+          type="button"
+          className="btn"
+          onClick={placeOrders}
+          disabled={checkout.isPending || items.length === 0}
+        >
+          {checkout.isPending
+            ? "Creating orders…"
+            : quote.data
+              ? `Place order · ₦${quote.data.total.toLocaleString()}`
+              : "Place order"}
+        </button>
+      </div>
     </div>
   );
 }
