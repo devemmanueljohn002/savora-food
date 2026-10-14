@@ -28,7 +28,13 @@ export async function GET(request: NextRequest) {
     response.cookies.set(OAUTH_VERIFIER_COOKIE, verifier, options);
     if (next) response.cookies.set(OAUTH_NEXT_COOKIE, next, options);
     return response;
-  } catch {
+  } catch (error) {
+    // Setup failures (missing AUTH_GOOGLE_ID/SECRET, missing APP_URL) land
+    // here: log for Vercel Runtime Logs and bounce to /auth with a code the
+    // UI already translates ("setup" = Google sign-in is not set up yet).
+    console.error("[auth] google start failed:", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.redirect(
       new URL("/auth?error=setup", request.url),
     );

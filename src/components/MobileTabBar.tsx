@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { Heart, Home, Search, ShoppingCart, UserRound, type LucideIcon } from "lucide-react";
 import CartCount from "./CartCount";
 import { useCurrentUser } from "@/lib/api/hooks";
-import { getAccountRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
+import { getAccountRouteForRole, getHomeRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
 
 /**
  * Fixed bottom tab bar for mobile (Lovable-style). Hidden on desktop where
@@ -24,6 +24,10 @@ function MobileTabs() {
   const role = isLoading ? undefined : (currentUser?.role ?? null);
   const showConsumerTabs = usesConsumerTabs(role);
   const accountHref = getAccountRouteForRole(role);
+  // Vendors/riders stay in their own area: Home goes to their dashboard,
+  // Account too — they never get bounced to the consumer storefront.
+  // Customers keep "/" as before (getHomeRouteForRole returns "/" for them).
+  const homeHref = isLoading ? "/" : getHomeRouteForRole(role ?? undefined);
   const dashboardTab = pathname === "/dashboard" ? (searchParams.get("tab") ?? "overview") : null;
 
   const accountActive =
@@ -46,7 +50,7 @@ function MobileTabs() {
     active: boolean;
     badge?: boolean;
   }> = [
-    { key: "home", label: "Home", href: "/", icon: Home, active: pathname === "/" },
+    { key: "home", label: "Home", href: homeHref, icon: Home, active: pathname === "/" || (homeHref !== "/" && pathname.startsWith(homeHref)) },
     { key: "search", label: "Search", href: "/search", icon: Search, active: pathname.startsWith("/search") },
     ...(showConsumerTabs
       ? [

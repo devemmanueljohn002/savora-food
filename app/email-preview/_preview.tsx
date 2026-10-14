@@ -11,16 +11,12 @@ const SWATCHES: [string, string][] = [
 ];
 
 export function resolvePreviewAppUrl(): string {
-  // APP_URL may be unset locally; fall back to the production origin used
-  // by the logo so the preview still renders links and images.
-  // Lazy-require keeps the client bundle free of server env parsing.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getEnv } = require("@/server/env");
-    return getEnv().appUrl;
-  } catch {
-    return "https://savora-food.vercel.app";
-  }
+  // APP_URL may be unset locally; siteUrl() never throws and resolves from
+  // SITE_URL / APP_URL / Vercel env, so the preview still renders links and
+  // images without ever pointing at a deleted deployment.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { siteUrl } = require("@/lib/site-url");
+  return siteUrl() as string;
 }
 
 export function EmailPreview({

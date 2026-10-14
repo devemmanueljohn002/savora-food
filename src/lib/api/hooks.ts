@@ -137,6 +137,7 @@ import {
   updateRiderProfile,
   updateSuperAdmin,
   updateVendorOnboarding,
+  updateVendorAvailability,
   updateVendorProduct,
   updateVendorProfileFull,
   uploadRiderDocument,
@@ -145,7 +146,9 @@ import {
   type CatalogQuery,
   type CateringRequestInput,
   type OrderQuery,
+  type VendorAvailability,
   type VendorOnboardingInput,
+  type VendorProfile,
   type VendorProductInput,
   type VendorQuery,
 } from "@/lib/savora-api";
@@ -1040,6 +1043,44 @@ export function useUpdateVendorProfile() {
     mutationFn: (input: Parameters<typeof updateVendorProfileFull>[0]) => updateVendorProfileFull(input),
     onSuccess: (profile) => {
       queryClient.setQueryData(vendorKeys.profile, profile);
+      void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
+    },
+  });
+}
+
+/**
+ * Open/Closed ("Accepting Orders") toggle with optimistic update + rollback:
+ * the dashboard flips instantly; on failure the previous state is restored
+ * from the onMutate snapshot and the error propagates to the caller.
+ */
+export function useUpdateVendorAvailability() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { isOpen: boolean }) => updateVendorAvailability(input),
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: vendorKeys.profile });
+      const previous = queryClient.getQueryData<VendorProfile>(vendorKeys.profile);
+      if (previous) {
+        queryClient.setQueryData<VendorProfile>(vendorKeys.profile, {
+          ...previous,
+          isOpen: input.isOpen,
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(vendorKeys.profile, context.previous);
+      }
+    },
+    onSuccess: (availability: VendorAvailability) => {
+      const current = queryClient.getQueryData<VendorProfile>(vendorKeys.profile);
+      if (current) {
+        queryClient.setQueryData<VendorProfile>(vendorKeys.profile, {
+          ...current,
+          isOpen: availability.isOpen,
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: vendorKeys.profile });
     },
   });

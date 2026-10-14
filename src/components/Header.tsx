@@ -117,6 +117,15 @@ export default function Header() {
   // still loading, fall back to the logged-out destinations (no flicker).
   const accountHref = getAccountRouteForRole(currentUser?.role);
   const dashboardHref = getDashboardRouteForRole(currentUser?.role);
+  // "Profile & Settings" must keep staff in their own area: vendors stay on
+  // the vendor profile, riders on the rider profile — never bounced to the
+  // consumer /account pages.
+  const profileHref =
+    currentUser?.role === "VENDOR"
+      ? "/vendor/profile"
+      : currentUser?.role === "DELIVERY_PARTNER"
+        ? "/rider/profile"
+        : "/account/profile";
   const showConsumerShortcuts = usesConsumerTabs(currentUser?.role);
 
   useEffect(() => {
@@ -295,7 +304,7 @@ export default function Header() {
                 <>
                   <Link
                     className="hdr-drawer-account"
-                    href="/account/profile"
+                    href={profileHref}
                     onClick={close}
                     aria-label={`Profile and settings (${firstName})`}
                   >
