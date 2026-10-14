@@ -4,16 +4,22 @@ import Link from "next/link";
 import { useState } from "react";
 import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
 import RoleGuard from "@/components/RoleGuard";
-import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp, useUpdateVendorAvailability } from "@/lib/api/hooks";
+import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp, useUpdateVendorAvailability, useVendorSchedule } from "@/lib/api/hooks";
 import PayoutPanel from "@/components/PayoutPanel";
 import { resolvePayoutBankAccount } from "@/lib/savora-api";
+import { describeAvailability } from "@/lib/lagos-time";
 
 /**
  * Open/Closed ("Accepting Orders") toggle at the top of the vendor
- * dashboard. Optimistic: the switch flips instantly and rolls back to the
- * previous state if the PATCH fails, with the error shown inline.
+ * dashboard. Shows live schedule status: "Open now · closes at 8:00 PM"
+ * or "Closed · opens tomorrow 8:00 AM". Manual toggle overrides schedule.
  */
-function AvailabilityToggle({ isOpen }: { isOpen: boolean }) {
+function AvailabilityToggle({ profileName, isOpen, nextChange, manualOverride }: { 
+  profileName: string; 
+  isOpen: boolean; 
+  nextChange: string | null; 
+  manualOverride: "open" | "closed" | null;
+}) {
   const update = useUpdateVendorAvailability();
   const [error, setError] = useState("");
 
@@ -30,13 +36,16 @@ function AvailabilityToggle({ isOpen }: { isOpen: boolean }) {
     <div className="card card-body" style={{ marginBottom: 20 }} role="status" aria-live="polite">
       <div className="row">
         <div>
+          <p className="vendor-status-kitchen" style={{ margin: "0 0 8px", fontWeight: 700 }}>{profileName}</p>
           <span className={`badge ${isOpen ? "badge-success" : "badge-danger"}`}>
-            {isOpen ? "Open · Accepting orders" : "Closed · Not accepting orders"}
+            {describeAvailability(isOpen, nextChange)}
           </span>
           <p className="muted" style={{ margin: "8px 0 0" }}>
-            {isOpen
-              ? "Customers can add your items to cart and check out."
-              : "Ordering is paused — customers see a Closed badge and cannot order until you reopen."}
+            {manualOverride === "closed"
+              ? "You closed the kitchen manually — the schedule is paused until you reopen."
+              : isOpen
+                ? "Customers can order from you right now."
+                : "Customers see a Closed badge and cannot order until you open."}
           </p>
         </div>
         <button className="btn" type="button" disabled={update.isPending} onClick={toggle}>
@@ -54,6 +63,7 @@ function AvailabilityToggle({ isOpen }: { isOpen: boolean }) {
 
 export default function VendorDashboardPage() {
   const profile = useVendorProfile();
+  const schedule = useVendorSchedule();
   const earnings = useVendorEarnings();
   const analytics = useVendorAnalytics();
   const orders = useVendorOrders({ limit: 5 });
@@ -76,6 +86,12 @@ export default function VendorDashboardPage() {
   }
   if (profile.isError || !profile.data) return <VendorSignIn />;
 
+  // Same computed availability customers are gated on, so the banner always
+  // matches what shoppers see.
+  const liveOpen = schedule.data?.isOpen ?? profile.data.isOpen ?? true;
+  const liveNextChange = schedule.data?.nextChange ?? null;
+  const liveManualOverride = schedule.data?.manualOverride ?? null;
+
   const pendingOrders = (orders.data?.items ?? []).filter((order) =>
     ["PAID", "VENDOR_ACCEPTED", "PREPARING"].includes(order.status),
   );
@@ -86,7 +102,12 @@ export default function VendorDashboardPage() {
   return (
     <RoleGuard allow={["VENDOR", "ADMIN"]}>
     <VendorShell profile={profile.data} title={profile.data.businessName} sub="Here is what is happening in your kitchen today.">
-      <AvailabilityToggle key={`availability-${profile.data.id}-${profile.data.isOpen}`} isOpen={profile.data.isOpen ?? true} />
+      <AvailabilityToggle 
+        profileName={profile.data.businessName} 
+        isOpen={liveOpen} 
+        nextChange={liveNextChange} 
+        manualOverride={liveManualOverride} 
+      />
       <div className="hero-stats">
         <div className="stat">
           <b>{earnings.data ? naira(earnings.data.last30Days.gross) : "—"}</b>
