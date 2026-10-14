@@ -46,7 +46,7 @@ export default function HomeHero() {
 
   if (!currentUser) {
     return (
-      <section className="hero">
+      <section className="hero hero-compact">
         <div className="container hero-grid">
           <div>
             <div className="hero-badge">Now delivering in Lagos, Abuja, Ibadan &amp; Port Harcourt</div>

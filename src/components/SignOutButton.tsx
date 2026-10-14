@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/lib/savora-api";
 
-export default function SignOutButton({ className = "btn secondary" }: { className?: string }) {
+export default function SignOutButton({ className = "btn secondary", onClick }: { className?: string; onClick?: () => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -25,7 +25,10 @@ export default function SignOutButton({ className = "btn secondary" }: { classNa
   }
 
   return (
-    <button className={className} type="button" onClick={signOut} disabled={busy}>
+    <button className={className} type="button" onClick={() => {
+      onClick?.();
+      signOut();
+    }} disabled={busy}>
       {busy ? "Signing out…" : "Sign out"}
     </button>
   );

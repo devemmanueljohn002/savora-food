@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, type LucideIcon } from "lucide-react";
+import { ArrowRight, Bike, CalendarCheck, Package, ShieldCheck, Star, Timer, Zap, type LucideIcon } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import HomeHero from "@/components/HomeHero";
 import InvitedBanner from "./InvitedBanner";
@@ -17,6 +17,7 @@ import {
   listProducts,
   listVendors,
 } from "@/server/queries/catalog";
+import { EmptyState } from "@/components/ui";
 
 const EVENT_TYPES = [
   "Wedding",
@@ -27,6 +28,27 @@ const EVENT_TYPES = [
   "Party",
   "Funeral",
   "Private Event",
+];
+
+const HOW_IT_WORKS: { step: number; icon: LucideIcon; title: string; desc: string }[] = [
+  { step: 1, icon: Search, title: "Search & discover", desc: "Find meals, cakes, snacks, drinks or caterers near you." },
+  { step: 2, icon: Zap, title: "Order in seconds", desc: "Add to cart, choose delivery time, pay securely with Naira." },
+  { step: 3, icon: Bike, title: "Track live", desc: "Watch your order from kitchen to door in real time." },
+  { step: 4, icon: Star, title: "Rate & repeat", desc: "Share your experience and reorder favorites in one tap." },
+];
+
+const CATEGORIES: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: "Food", href: "/food", icon: Package },
+  { label: "Cakes", href: "/cakes", icon: Package },
+  { label: "Snacks", href: "/snacks", icon: Package },
+  { label: "Drinks", href: "/drinks", icon: Package },
+  { label: "Catering", href: "/catering", icon: CalendarCheck },
+];
+
+const OFFERS = [
+  { title: "First order free delivery", desc: "On orders over ₦3,000 — use code WELCOME", icon: Zap },
+  { title: "Weekend catering deal", desc: "10% off catering packages booked Fri–Sun", icon: CalendarCheck },
+  { title: "Refer a friend", desc: "You both get ₦2,000 credit when they order", icon: Star },
 ];
 
 const QUICK_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
@@ -77,7 +99,7 @@ export const metadata: Metadata = {
     description:
       "Order hot, freshly cooked meals, cakes, snacks and drinks from trusted local kitchens.",
     url: absoluteUrl("/"),
-    ...DEFAULT_OG_IMAGES,
+    images: DEFAULT_OG_IMAGES,
   },
   twitter: {
     ...DEFAULT_TWITTER_IMAGE,
@@ -121,21 +143,18 @@ export default async function Home() {
       <InvitedBanner />
       <HomeHero />
 
-      <section className="section container">
-        <div className="section-head">
-          <div>
-            <h2>Shop by category</h2>
-            <p>Everything from a quick lunch to a full event spread.</p>
-          </div>
-        </div>
-        <div className="category">
-          {categories.map((category) => (
-            <CategoryCard key={category.id} category={category} />
+      <section className="section container" aria-label="Categories">
+        <div className="chip-row" role="tablist" aria-label="Food categories">
+          {CATEGORIES.map(({ label, href, icon: Icon }) => (
+            <Link key={href} href={href} className="chip" role="tab">
+              <Icon className="chip-ico" aria-hidden="true" />
+              {label}
+            </Link>
           ))}
         </div>
       </section>
 
-      <section className="section container">
+      <section className="section container" aria-label="Featured vendors">
         <div className="section-head">
           <div>
             <h2>Featured vendors</h2>
@@ -146,7 +165,7 @@ export default async function Home() {
           </Link>
         </div>
         {vendorResult.items.length === 0 ? (
-          <p className="muted">Vendors are being onboarded. Check back soon.</p>
+          <EmptyState compact icon={<ShieldCheck />} title="Vendors are being onboarded. Check back soon." />
         ) : (
           <div className="vendor-grid">
             {vendorResult.items.map((vendor) => (
@@ -156,7 +175,7 @@ export default async function Home() {
         )}
       </section>
 
-      <section className="section container">
+      <section className="section container" aria-label="Popular meals">
         <div className="section-head">
           <div>
             <h2>Popular right now</h2>
@@ -167,7 +186,7 @@ export default async function Home() {
           </Link>
         </div>
         {featured.length === 0 ? (
-          <p className="muted">No products available yet.</p>
+          <EmptyState compact icon={<Package />} title="No products available yet." />
         ) : (
           <div className="product-grid">
             {featured.map((item) => (
@@ -177,70 +196,66 @@ export default async function Home() {
         )}
       </section>
 
-      <section className="section" style={{ background: "#fff5e4" }}>
-        <div className="container">
-          <div className="two-col-center">
-            <div>
-              <div className="catering-badge">Catering Marketplace</div>
-              <h2 className="catering-title">Book trusted caterers for any event</h2>
-              <p className="catering-lead">
-                Share your event details, receive a quote, confirm the booking and track it right up to event day.
-              </p>
-              <div className="event-chips">
-                {EVENT_TYPES.map((event) => (
-                  <span className="tag-badge" key={event}>{event}</span>
-                ))}
+      <section className="section container" style={{ background: "#fff5e4" }} aria-label="Offers">
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
+          {OFFERS.map((offer, i) => (
+            <div key={i} className="card card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="row" style={{ justifyContent: "flex-start", gap: 12 }}>
+                <Zap className="text-primary" aria-hidden="true" style={{ fontSize: 24 }} />
+                <h3 style={{ margin: 0 }}>{offer.title}</h3>
               </div>
-              <Link className="catering-btn" href="/catering">
-                <CalendarCheck className="catering-btn-ico" aria-hidden="true" /> Request catering
-              </Link>
+              <p className="muted" style={{ margin: 0 }}>{offer.desc}</p>
             </div>
-            {packages.length === 0 ? (
-              <p className="muted">Catering packages are being added. Check back soon.</p>
-            ) : (
-              <div className="package-grid">
-                {packages.map((pkg) => (
-                  <div className="package-card" key={pkg.id}>
-                    <h3 className="package-title">{pkg.title}</h3>
-                    <p className="package-vendor">{pkg.vendorName}</p>
-                    <p className="package-price-line">
-                      <span className="package-price">₦{pkg.pricePerGuest.toLocaleString()}</span> per guest · min{" "}
-                      {pkg.minimumGuests}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       </section>
 
-      <section className="section container">
+      <section className="section container" aria-label="How it works">
+        <div className="section-head">
+          <h2>How it works</h2>
+          <p>From craving to doorstep in four simple steps.</p>
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
+          {HOW_IT_WORKS.map(({ step, icon: Icon, title, desc }) => (
+            <div key={step} className="card card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="row" style={{ justifyContent: "flex-start", gap: 10 }}>
+                <span className="chip" style={{ background: "#fff5e4", color: "var(--orange)", borderColor: "transparent" }}>
+                  <strong style={{ fontSize: 20 }}>{step}</strong>
+                </span>
+                <Icon className="text-primary" aria-hidden="true" style={{ fontSize: 24 }} />
+              </div>
+              <h3 style={{ margin: 0 }}>{title}</h3>
+              <p className="muted" style={{ margin: 0 }}>{desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="section container" aria-label="Testimonials">
         <h2>Loved by customers</h2>
         <p className="section-sub">Real orders, real reviews from across Nigeria.</p>
         <div className="grid">
           {TESTIMONIALS.map((testimonial) => (
-            <div className="card card-body testimonial" key={testimonial.name}>
-              <div className="row" style={{ justifyContent: "flex-start" }}>
+            <div className="card card-body" key={testimonial.name}>
+              <div className="row" style={{ justifyContent: "flex-start", gap: 12 }}>
                 <span className="avatar">{testimonial.initial}</span>
                 <div>
                   <strong>{testimonial.name}</strong>
                   <p className="muted" style={{ margin: 0 }}>{testimonial.location}</p>
                 </div>
               </div>
-              <blockquote>“{testimonial.quote}”</blockquote>
+              <blockquote style={{ margin: "12px 0 0" }}>“{testimonial.quote}”</blockquote>
               <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>— {testimonial.vendor}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="quick-links container">
-        <h2>Quick links</h2>
-        <div className="quick-grid">
+      <section className="section container" aria-label="Quick links">
+        <div className="chip-row" role="tablist" aria-label="Quick links">
           {QUICK_LINKS.map(({ label, href, icon: Icon }) => (
-            <Link className="quick-link" href={href} key={href}>
-              <Icon className="quick-link-ico" aria-hidden="true" />
+            <Link key={href} href={href} className="chip" role="tab">
+              <Icon className="chip-ico" aria-hidden="true" />
               {label}
             </Link>
           ))}

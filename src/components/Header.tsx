@@ -14,7 +14,6 @@ import {
   Heart,
   Home,
   Info,
-  LayoutDashboard,
   MapPin,
   Menu,
   Phone,
@@ -119,15 +118,6 @@ export default function Header() {
   // still loading, fall back to the logged-out destinations (no flicker).
   const accountHref = getAccountRouteForRole(currentUser?.role);
   const dashboardHref = getDashboardRouteForRole(currentUser?.role);
-  // "Profile & Settings" must keep staff in their own area: vendors stay on
-  // the vendor profile, riders on the rider profile — never bounced to the
-  // consumer /account pages.
-  const profileHref =
-    currentUser?.role === "VENDOR"
-      ? "/vendor/profile"
-      : currentUser?.role === "DELIVERY_PARTNER"
-        ? "/rider/profile"
-        : "/account/profile";
   const showConsumerShortcuts = usesConsumerTabs(currentUser?.role);
   // Delivery city from the shopper's default saved address (real data).
   const deliveryCity =
@@ -176,7 +166,6 @@ export default function Header() {
         className={active ? "active" : undefined}
         data-status={active ? "active" : undefined}
         aria-current={active ? "page" : undefined}
-        onClick={close}
       >
         <Icon className="hdr-drawer-ico" aria-hidden="true" />
         {label}
@@ -242,7 +231,7 @@ export default function Header() {
               href={accountHref}
               aria-label={`Account dashboard (${firstName})`}
             >
-              <LayoutDashboard className="hdr-ico" aria-hidden="true" /> {firstName}
+              <User className="hdr-ico" aria-hidden="true" /> {firstName}
             </Link>
           ) : (
             <Link className="hdr-login" href="/auth">
@@ -312,7 +301,7 @@ export default function Header() {
               <p className="hdr-sec-label" aria-hidden="true">Shop</p>
               {shopLinks.map(renderDrawerRow)}
               <p className="hdr-sec-label" aria-hidden="true">Account</p>
-              {renderDrawerRow({ label: "My Dashboard", href: dashboardHref, icon: LayoutDashboard })}
+              {renderDrawerRow({ label: "My Dashboard", href: dashboardHref, icon: Home })}
               {savoraLinks.map(renderDrawerRow)}
             </nav>
             <div className="hdr-drawer-foot">
@@ -320,11 +309,11 @@ export default function Header() {
                 <SignOutButton className="hdr-drawer-signout" onClick={close} />
               ) : (
                 <>
-                  <Link className="hdr-drawer-login" href="/auth" onClick={close}>
+                  <Link className="hdr-drawer-login" href="/auth">
                     <User className="hdr-drawer-ico" aria-hidden="true" />
                     Login
                   </Link>
-                  <Link className="hdr-drawer-register" href="/register" onClick={close}>
+                  <Link className="hdr-drawer-register" href="/register">
                     <UserPlus className="hdr-drawer-ico" aria-hidden="true" />
                     Create account
                   </Link>
