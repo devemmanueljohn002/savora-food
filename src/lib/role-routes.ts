@@ -38,6 +38,17 @@ export function getDashboardRouteForRole(role?: string | null): string {
   return getHomeRouteForRole(role);
 }
 
+/**
+ * Where a successful sign-in lands. The destination is derived ONLY from the
+ * role stored on the user's row (surfaced by the login API) — never from
+ * client input such as the signup role dropdown. Admins land on the /admin
+ * area; every other role lands on its own dashboard.
+ */
+export function getPostLoginRouteForRole(role?: string | null): string {
+  if (role === "ADMIN") return "/admin";
+  return getDashboardRouteForRole(role);
+}
+
 export function getAccountRouteForRole(role?: string | null): string {
   if (!role) return "/auth";
   if (role === "CUSTOMER") return "/dashboard";
@@ -47,6 +58,28 @@ export function getAccountRouteForRole(role?: string | null): string {
 /** Roles that use the consumer storefront tabs (cart, saved, favorites). */
 export function usesConsumerTabs(role?: string | null): boolean {
   return !role || role === "CUSTOMER" || role === "ADMIN" || role === "SUPER_ADMIN";
+}
+
+/**
+ * Private vendor portal routes. These are the reserved /vendor/<segment>
+ * destinations — public storefront pages such as /vendor/<slug> are not
+ * included, so customers browsing a vendor's page keep the consumer shell.
+ */
+const VENDOR_PORTAL_SEGMENTS = new Set([
+  "dashboard",
+  "orders",
+  "products",
+  "catering",
+  "payouts",
+  "schedule",
+  "profile",
+  "onboarding",
+]);
+
+export function isVendorPortalRoute(pathname?: string | null): boolean {
+  if (!pathname?.startsWith("/vendor/")) return false;
+  const [segment] = pathname.slice("/vendor/".length).split("/");
+  return VENDOR_PORTAL_SEGMENTS.has(segment);
 }
 
 /** Orders destination for footer/drawer shortcuts. */

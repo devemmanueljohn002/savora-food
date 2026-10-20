@@ -213,11 +213,17 @@ export type AuthUser = {
   role: string;
 };
 
-export function login(input: { email?: string; identifier?: string; password: string }) {
+/** Server-computed post-login destination, derived from the stored role. */
+export type LoginResult = AuthUser & { redirectTo?: string };
+
+export function login(input: { email?: string; identifier?: string; password: string }): Promise<LoginResult> {
   return apiSend<AuthUser>("/auth/login", "POST", {
     identifier: input.identifier ?? input.email ?? "",
     password: input.password,
-  }).then((result) => result.data);
+  }).then((result) => ({
+    ...result.data,
+    redirectTo: typeof result.meta?.redirectTo === "string" ? result.meta.redirectTo : undefined,
+  }));
 }
 
 export function register(input: { firstName: string; lastName: string; email: string; phone?: string; password: string; role?: string }) {

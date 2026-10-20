@@ -39,7 +39,7 @@ export function RiderShell({ profile, title, sub, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <div className="row" style={{ alignItems: "flex-start", marginBottom: 6 }}>
           <div>
@@ -73,7 +73,7 @@ export function RiderShell({ profile, title, sub, children }: {
 
 export function RiderSignIn() {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <h1>Rider dashboard</h1>
         <p className="muted">Please sign in with your rider account.</p>

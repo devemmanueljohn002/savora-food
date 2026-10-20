@@ -16,7 +16,7 @@ const LINKS: [string, string][] = [
 export default function VendorNav() {
   const pathname = usePathname();
   return (
-    <nav className="vendor-tabs" aria-label="Vendor">
+    <nav className="vendor-tabs vendor-nav" aria-label="Vendor">
       {LINKS.map(([label, href]) => {
         const active = pathname === href || (href !== "/vendor/dashboard" && pathname.startsWith(`${href}/`));
         return (

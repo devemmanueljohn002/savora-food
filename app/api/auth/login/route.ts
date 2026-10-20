@@ -4,8 +4,12 @@ import { ApiError, ok, toEnvelope } from "@/server/errors";
 import { verifyPassword } from "@/server/auth/password";
 import { getUserByEmailOrPhone } from "@/server/auth/store";
 import { startSession, toPublicUser } from "@/server/auth/session-flow";
+import { getPostLoginRouteForRole } from "@/lib/role-routes";
 import { limitByIp, rateLimitedResponse } from "@/server/rate-limit";
 
+// Only identifier + password are accepted. Any extra body field (notably the
+// signup role dropdown, if a client ever sends it) is stripped by zod and has
+// no effect — the role is read from the stored user row below.
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, "Enter your email or phone number"),
   password: z.string().min(1, "Enter your password").max(128),
@@ -38,7 +42,10 @@ export async function POST(request: Request) {
       throw ApiError.unauthorized("Invalid email/phone or password.");
     }
 
-    const response = NextResponse.json(ok(toPublicUser(user)));
+    // Destination is computed from the STORED role (never client input):
+    // ADMIN -> /admin, everyone else -> their role dashboard.
+    const redirectTo = getPostLoginRouteForRole(user.role);
+    const response = NextResponse.json(ok(toPublicUser(user), { redirectTo }));
     await startSession(response, user, request as unknown as import("next/server").NextRequest);
     return response;
   } catch (error) {

@@ -12,7 +12,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reconcile": "tsx scripts/reconcile-payments.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:seed:admin": "tsx scripts/seed.ts --admin-only"
+    "db:seed:admin": "tsx scripts/seed.ts --admin-only",
+    "db:seed:admin:env": "tsx scripts/seed-admin.ts",
+    "db:check:admin": "tsx scripts/check-admin.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

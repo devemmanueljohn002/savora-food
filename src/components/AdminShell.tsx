@@ -43,7 +43,7 @@ export function AdminShell({ title, sub, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <div className="row" style={{ alignItems: "flex-start", marginBottom: 6 }}>
           <div>
@@ -61,7 +61,7 @@ export function AdminShell({ title, sub, children }: {
 
 export function AdminSignIn() {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <h1>Admin</h1>
         <p className="muted">Please sign in with an admin account.</p>

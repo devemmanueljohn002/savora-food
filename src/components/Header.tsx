@@ -29,7 +29,12 @@ import HeaderSearch from "./HeaderSearch";
 import CartCount from "./CartCount";
 import SignOutButton from "./SignOutButton";
 import { useCurrentUser, useFavorites } from "@/lib/api/hooks";
-import { getAccountRouteForRole, getDashboardRouteForRole, usesConsumerTabs } from "@/lib/role-routes";
+import {
+  getAccountRouteForRole,
+  getDashboardRouteForRole,
+  isVendorPortalRoute,
+  usesConsumerTabs,
+} from "@/lib/role-routes";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
 
@@ -58,6 +63,7 @@ function FavoriteCount() {
 
 export default function Header() {
   const pathname = usePathname();
+  const isVendorRoute = isVendorPortalRoute(pathname);
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const drawerId = useId();
@@ -203,9 +209,11 @@ export default function Header() {
           <img src="/savora-logo-wide.png" alt="Savora Food — Your Food. Your Choice. Delivered." />
         </Link>
 
-        <div className="hdr-search">
-          <HeaderSearch />
-        </div>
+        {isVendorRoute ? null : (
+          <div className="hdr-search">
+            <HeaderSearch />
+          </div>
+        )}
 
         <div className="hdr-actions">
           {showConsumerShortcuts ? (
@@ -255,9 +263,11 @@ export default function Header() {
         </div>
       </nav>
 
-      <div className="hdr-mobile-search">
-        <HeaderSearch />
-      </div>
+      {isVendorRoute ? null : (
+        <div className="hdr-mobile-search">
+          <HeaderSearch />
+        </div>
+      )}
 
       {open
         ? createPortal(

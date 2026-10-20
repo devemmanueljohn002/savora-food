@@ -122,6 +122,8 @@ a{text-decoration:none;color:inherit} button,input,textarea,select{font:inherit}
 .vendor-tabs{display:flex;gap:6px;margin:22px 0 18px;flex-wrap:wrap}
 .vendor-tab{cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-weight:700;font-size:14px}
 .vendor-tab.selected{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* The vendor bottom nav replaces the pill tabs on mobile/tablet. */
+@media(max-width:1023px){.vendor-nav{display:none}}
 .save-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:14px}
 .save-btn.saved{color:var(--orange);border-color:#ffc9a3;background:#fff5ec}
 
@@ -379,8 +381,10 @@ a.order-row:hover{border-color:var(--orange)}
 .footer-brand{display:flex;flex-direction:column;gap:12px}
 .footer-brand img{height:40px;width:auto;align-self:flex-start}
 .footer-brand .muted{margin:0;font-size:14px}
-.footer-socials{display:flex;gap:8px;padding-top:4px}
-.footer-social{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--muted)}
+.footer-socials{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
+.footer-social{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--muted);transition:color .15s,border-color .15s,background-color .15s}
+.footer-social:hover{color:var(--orange);border-color:var(--orange);background:#fff5ec}
+.footer-social:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .footer-social-ico{width:16px;height:16px}
 .footer-heading{font-size:14px;font-weight:600;margin:0 0 12px}
 .footer-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}

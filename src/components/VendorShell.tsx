@@ -13,7 +13,7 @@ export function VendorShell({ profile, title, sub, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <div className="row vendor-head" style={{ alignItems: "flex-start", marginBottom: 6 }}>
           <div>
@@ -42,7 +42,7 @@ export function VendorShell({ profile, title, sub, children }: {
 
 export function VendorSignIn() {
   return (
-    <PageShell>
+    <PageShell showSocials={false}>
       <section className="section container">
         <h1>Vendor dashboard</h1>
         <p className="muted">Please sign in with your vendor account.</p>

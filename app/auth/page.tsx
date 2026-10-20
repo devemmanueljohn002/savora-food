@@ -99,7 +99,9 @@ function AuthCard() {
     try {
       const user = await login({ email: form.email, password: form.password });
       localStorage.setItem("savora.user", JSON.stringify(user));
-      window.location.href = destination(user.role);
+      // Destination comes from the STORED role (server-computed). The signup
+      // role dropdown is irrelevant to sign-in; an explicit ?next= still wins.
+      window.location.href = isSafeNext(next) ? next : (user.redirectTo ?? destination(user.role));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign in failed");
       setBusy(false);
