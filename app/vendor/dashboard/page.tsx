@@ -6,6 +6,8 @@ import { VendorShell, VendorSignIn, naira } from "@/components/VendorShell";
 import RoleGuard from "@/components/RoleGuard";
 import { useVendorAnalytics, useVendorEarnings, useVendorOrders, useVendorCatering, useVendorProfile, useVendorWithdrawals, useVendorRecipient, usePayoutBanks, useSaveVendorRecipient, useRequestVendorWithdrawal, useRequestVendorWithdrawalOtp, useUpdateVendorAvailability, useVendorSchedule } from "@/lib/api/hooks";
 import PayoutPanel from "@/components/PayoutPanel";
+import VendorReviews from "@/components/VendorReviews";
+import { MIN_VENDOR_RATING_REVIEWS } from "@/lib/review-types";
 import { resolvePayoutBankAccount } from "@/lib/savora-api";
 import { describeAvailability } from "@/lib/lagos-time";
 
@@ -126,10 +128,28 @@ export default function VendorDashboardPage() {
           <span>Catering requests awaiting quote</span>
         </div>
         <div className="stat">
-          <b>★ {(analytics.data?.rating.average ?? 0).toFixed(1)}</b>
+          <b>
+            {(analytics.data?.rating.count ?? 0) >= MIN_VENDOR_RATING_REVIEWS
+              ? `★ ${(analytics.data?.rating.average ?? 0).toFixed(1)}`
+              : "New"}
+          </b>
           <span>{analytics.data?.rating.count ?? 0} reviews</span>
         </div>
       </div>
+
+      <section style={{ marginTop: 28 }}>
+        <div className="row">
+          <h2 style={{ margin: 0 }}>Your reviews</h2>
+          <span className="badge">Read-only</span>
+        </div>
+        <p className="muted" style={{ marginTop: 4 }}>
+          Public vendor feedback from delivered orders. Rider ratings and comments are private to admins.
+        </p>
+        <VendorReviews
+          vendorId={profile.data.id}
+          emptyText="No reviews yet. Customers can review after their order is delivered."
+        />
+      </section>
 
       <div className="two-col" style={{ marginTop: 32 }}>
         <div>

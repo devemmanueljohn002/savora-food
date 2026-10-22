@@ -211,7 +211,7 @@ export async function sendOrderDeliveredEmail(
       ...input,
       appUrl,
       logoUrl: `${appUrl}/savora-logo-wide.png`,
-      rateUrl: `${appUrl}/dashboard?tab=orders`,
+      rateUrl: `${appUrl}/dashboard?tab=orders#reviews`,
       trackUrl: `${appUrl}/track`,
       supportUrl: `${appUrl}/contact`,
       termsUrl: `${appUrl}/terms`,

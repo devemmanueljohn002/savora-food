@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Heart, LogIn, Package, Receipt, UtensilsCrossed, Wallet } from "lucide-react";
 import PageShell from "@/components/PageShell";
 import AccountTypeSwitcher from "@/components/AccountTypeSwitcher";
+import OrderReviewCard from "@/components/OrderReviewCard";
 import RoleGuard from "@/components/RoleGuard";
 import SignOutButton from "@/components/SignOutButton";
 import {
@@ -226,7 +227,7 @@ function OrderCard({ order }: { order: OrderListItem }) {
   }
 
   return (
-    <div className="card card-body" key={order.id}>
+    <div className="card card-body" key={order.id} id={`review-${order.id}`}>
       <div className="row">
         <div>
           <strong>{order.orderNumber}</strong>
@@ -301,6 +302,11 @@ function OrderCard({ order }: { order: OrderListItem }) {
           )}
         </div>
       )}
+      {order.status === "DELIVERED" ? (
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+          <OrderReviewCard orderId={order.id} hasRider={order.hasRider} review={order.review} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -310,7 +316,7 @@ function OrdersTab() {
   const orders = useOrders({ page, limit: 10 });
 
   return (
-    <div>
+    <div id="reviews">
       {orders.isLoading ? (
         <p className="muted">Loading orders…</p>
       ) : (orders.data?.items.length ?? 0) === 0 ? (

@@ -3,6 +3,7 @@ import { ok, toEnvelope } from "@/server/errors";
 import { requireVendor } from "@/server/auth/guard";
 import { getVendorContext } from "@/server/vendors";
 import { db } from "@/server/db";
+import { getVendorRatingSummary } from "@/server/reviews";
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
       ORDER BY stock_quantity ASC
       LIMIT 5
     `;
+    const ratingSummary = await getVendorRatingSummary(vendor.id);
 
     return NextResponse.json(
       ok({
@@ -71,8 +73,8 @@ export async function GET(request: NextRequest) {
         })),
         lowStock,
         rating: {
-          average: Number(vendor.rating_average ?? 0),
-          count: vendor.rating_count ?? 0,
+          average: ratingSummary?.average ?? 0,
+          count: ratingSummary?.count ?? 0,
         },
       }),
     );

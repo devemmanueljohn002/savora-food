@@ -3,8 +3,10 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import PageShell from "@/components/PageShell";
 import ProductCard from "@/components/ProductCard";
+import VendorReviews from "@/components/VendorReviews";
 import { getVendorBySlug, listProducts } from "@/server/queries/catalog";
 import { absoluteUrl } from "@/lib/site-url";
+import { MIN_VENDOR_RATING_REVIEWS } from "@/lib/review-types";
 import { toJsonLdScript } from "@/lib/safe-json";
 
 const FALLBACK_IMAGE =
@@ -56,8 +58,8 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             addressCountry: "NG",
           }
         : undefined,
-    // Only real ratings — never emitted when the vendor has none.
-    ...(vendor.ratingCount > 0
+    // Only real ratings — emitted once the vendor has enough reviews.
+    ...(vendor.ratingCount >= MIN_VENDOR_RATING_REVIEWS
       ? {
           aggregateRating: {
             "@type": "AggregateRating",
@@ -89,7 +91,15 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         ) : null}
         <p className="muted">{vendor.description ?? "Freshly prepared by a trusted vendor."}</p>
         <p className="rating">
-          ★ {vendor.rating.toFixed(1)} · {vendor.categories[0] ?? "Marketplace"} · {location}
+          {vendor.ratingCount >= MIN_VENDOR_RATING_REVIEWS ? (
+            <>
+              ★ {vendor.rating.toFixed(1)} · {vendor.ratingCount} review
+              {vendor.ratingCount === 1 ? "" : "s"} ·{" "}
+            </>
+          ) : (
+            <>New · </>
+          )}
+          {vendor.categories[0] ?? "Marketplace"} · {location}
         </p>
         {vendor.address ? <p className="muted">{vendor.address}</p> : null}
 
@@ -106,6 +116,20 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             ))}
           </div>
         )}
+      </section>
+
+      <section className="section container">
+        <h2>Customer reviews</h2>
+        {vendor.ratingCount >= MIN_VENDOR_RATING_REVIEWS ? (
+          <p className="muted" style={{ marginTop: 0 }}>
+            ★ {vendor.rating.toFixed(1)} average from {vendor.ratingCount} reviews
+          </p>
+        ) : (
+          <p className="muted" style={{ marginTop: 0 }}>
+            New vendor — customer reviews will appear here after delivered orders.
+          </p>
+        )}
+        <VendorReviews vendorId={vendor.id} />
       </section>
     </PageShell>
   );

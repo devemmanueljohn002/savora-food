@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BadgeCheck, Bike, MapPin, Star } from "lucide-react";
 import type { CatalogVendor } from "@/lib/catalog-types";
+import { MIN_VENDOR_RATING_REVIEWS } from "@/lib/review-types";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1200&q=80";
@@ -36,8 +37,15 @@ export default function VendorCard({
             </p>
           </div>
           <span className="vendor-rating">
-            <Star className="vendor-star" aria-hidden="true" />
-            <span>{vendor.rating.toFixed(1)}</span>
+            {vendor.ratingCount >= MIN_VENDOR_RATING_REVIEWS ? (
+              <>
+                <Star className="vendor-star" aria-hidden="true" />
+                <span>{vendor.rating.toFixed(1)}</span>
+                <span className="muted">({vendor.ratingCount})</span>
+              </>
+            ) : (
+              <span className="badge">New</span>
+            )}
           </span>
         </div>
         <div className="vendor-tags">

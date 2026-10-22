@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   acceptRiderJob,
   declineRiderJob,
@@ -19,6 +19,7 @@ import {
   createSuperAdmin,
   createCheckoutOrders,
   createScheduleException,
+  createOrderReview,
   createProductReview,
   createProductVariant,
   createVendorProduct,
@@ -73,6 +74,8 @@ import {
   getVendorProfile,
   getVendors,
   getVendorProducts,
+  getVendorRatingSummary,
+  getVendorReviews,
   getRiderRecipient,
   finalizeProfilePhotoUpload,
   listRiderWithdrawals,
@@ -86,6 +89,7 @@ import {
   listAdminOrders,
   listAdminPayouts,
   listAdminProducts,
+  listAdminReviews,
   listAdminRiders,
   listAdminVendors,
   listAdminVendorQueue,
@@ -121,6 +125,7 @@ import {
   saveAffiliateRecipient,
   saveVendorRecipient,
   saveVendorSchedule,
+  setAdminReviewVisibility,
   getVendorRecipient,
   toggleFavorite,
   updateAccount,
@@ -622,6 +627,52 @@ export function useReviewableOrders(productId: string) {
     enabled: Boolean(productId),
     retry: false,
     staleTime: 60_000,
+  });
+}
+
+export const vendorReviewKeys = {
+  summary: (identifier: string) => ["vendor-rating-summary", identifier] as const,
+  reviews: (identifier: string) => ["vendor-reviews", identifier] as const,
+};
+
+export function useVendorRatingSummary(identifier: string) {
+  return useQuery({
+    queryKey: vendorReviewKeys.summary(identifier),
+    queryFn: () => getVendorRatingSummary(identifier),
+    enabled: Boolean(identifier),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useVendorReviews(identifier: string, limit = 5) {
+  return useInfiniteQuery({
+    queryKey: [...vendorReviewKeys.reviews(identifier), limit] as const,
+    queryFn: ({ pageParam }) => getVendorReviews(identifier, { page: pageParam, limit }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+    enabled: Boolean(identifier),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateOrderReview(orderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      vendorRating: number;
+      vendorComment?: string | null;
+      riderRating?: number | null;
+      riderComment?: string | null;
+    }) => createOrderReview(orderId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: cartKeys.orders({}) });
+      void queryClient.invalidateQueries({ queryKey: ["orders"] });
+      void queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-rating-summary"] });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.reviews });
+    },
   });
 }
 
@@ -1289,6 +1340,7 @@ export const adminKeys = {
   orders: ["admin-orders"] as const,
   order: (id: string) => ["admin-order", id] as const,
   products: ["admin-products"] as const,
+  reviews: ["admin-reviews"] as const,
   payouts: ["admin-payouts"] as const,
   coupons: ["admin-coupons"] as const,
   categories: ["admin-categories"] as const,
@@ -1445,6 +1497,30 @@ export function useUpdateAdminProduct(id: string) {
     mutationFn: (input: { isFeatured?: boolean; isActive?: boolean }) => updateAdminProduct(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.products });
+    },
+  });
+}
+
+export function useAdminReviews(
+  params: { vendor?: string; rider?: string; hidden?: boolean; page?: number; limit?: number } = {},
+) {
+  return useQuery({
+    queryKey: [...adminKeys.reviews, params] as const,
+    queryFn: () => listAdminReviews(params),
+    retry: false,
+    staleTime: 15_000,
+  });
+}
+
+export function useSetAdminReviewVisibility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
+      setAdminReviewVisibility(id, hidden),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.reviews });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["vendor-rating-summary"] });
     },
   });
 }

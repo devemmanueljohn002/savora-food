@@ -5,6 +5,7 @@ import { requireVendor } from "@/server/auth/guard";
 import { storedImageUrl } from "@/lib/safe-url";
 import { getVendorByUserId, updateVendorProfile } from "@/server/auth/store";
 import { db } from "@/server/db";
+import { getVendorRatingSummary } from "@/server/reviews";
 
 const profileSchema = z.object({
   businessName: z.string().trim().min(2).max(150).optional(),
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     const session = await requireVendor(request);
     const vendor = await getVendorByUserId(session.id);
     if (!vendor) throw ApiError.notFound("No vendor profile found for this account.");
+    const rating = await getVendorRatingSummary(vendor.id);
     return NextResponse.json(
       ok({
         id: vendor.id,
@@ -48,8 +50,8 @@ export async function GET(request: NextRequest) {
         hasProfilePhoto: vendor.profile_photo_key != null,
         status: vendor.status,
         commissionRate: vendor.commission_rate === null ? null : Number(vendor.commission_rate),
-        ratingAverage: Number(vendor.rating_average ?? 0),
-        ratingCount: vendor.rating_count ?? 0,
+        ratingAverage: rating?.average ?? 0,
+        ratingCount: rating?.count ?? 0,
         isFeatured: vendor.is_featured ?? false,
       }),
     );

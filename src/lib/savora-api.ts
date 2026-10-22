@@ -13,6 +13,12 @@ import type {
 } from "./catalog-types";
 import { getDashboardRouteForRole } from "./role-routes";
 import type {
+  AdminReview,
+  OrderReview,
+  VendorRatingSummary,
+  VendorReview,
+} from "./review-types";
+import type {
   Address,
   AddressInput,
   CartView,
@@ -37,6 +43,7 @@ export type {
   ProductType,
   VendorSort,
 };
+export type { AdminReview, OrderReview, VendorRatingSummary, VendorReview };
 export type {
   Address,
   AddressInput,
@@ -200,6 +207,49 @@ export function getVendorProducts(slug: string, params: { page?: number; limit?:
 
 export function getCateringPackages(params: { limit?: number } = {}, signal?: AbortSignal) {
   return apiGet<CateringPackage[]>(`/catering/packages${queryString({ limit: params.limit })}`, signal);
+}
+
+// ── Vendor ratings & reviews ─────────────────────────────────────────────
+
+export function getVendorReviews(
+  identifier: string,
+  params: { page?: number; limit?: number } = {},
+  signal?: AbortSignal,
+) {
+  return apiGet<VendorReview[]>(
+    `/vendors/${encodeURIComponent(identifier)}/reviews${queryString({
+      page: params.page,
+      limit: params.limit,
+    })}`,
+    signal,
+  ).then(paged);
+}
+
+export function getVendorRatingSummary(identifier: string, signal?: AbortSignal) {
+  return apiGet<VendorRatingSummary>(
+    `/vendors/${encodeURIComponent(identifier)}/rating-summary`,
+    signal,
+  ).then((result) => result.data);
+}
+
+export function createOrderReview(
+  orderId: string,
+  input: {
+    vendorRating: number;
+    vendorComment?: string | null;
+    riderRating?: number | null;
+    riderComment?: string | null;
+  },
+) {
+  return apiSend<OrderReview>(`/orders/${encodeURIComponent(orderId)}/review`, "POST", input).then(
+    (result) => result.data,
+  );
+}
+
+export function getOrderReview(orderId: string) {
+  return apiGet<OrderReview | null>(`/orders/${encodeURIComponent(orderId)}/review`).then(
+    (result) => result.data,
+  );
 }
 
 // ── Auth (cookie sessions) ──────────────────────────────────────────────
@@ -1226,6 +1276,34 @@ export type AdminPayout = {
   paidAt: string | null;
   createdAt: string;
 };
+
+export type AdminReviewQuery = {
+  vendor?: string;
+  rider?: string;
+  hidden?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+export function listAdminReviews(params: AdminReviewQuery = {}) {
+  return apiGet<AdminReview[]>(
+    `/admin/reviews${queryString({
+      vendor: params.vendor,
+      rider: params.rider,
+      hidden: params.hidden,
+      page: params.page,
+      limit: params.limit,
+    })}`,
+  ).then(paged);
+}
+
+export function setAdminReviewVisibility(id: string, hidden: boolean) {
+  return apiSend<AdminReview>(
+    `/admin/reviews/${encodeURIComponent(id)}/visibility`,
+    "PATCH",
+    { hidden },
+  ).then((result) => result.data);
+}
 
 export function listAdminPayouts(params: { status?: string } = {}) {
   return apiGet<AdminPayout[]>(`/admin/payouts${queryString({ status: params.status })}`).then(

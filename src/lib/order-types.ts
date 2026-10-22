@@ -1,3 +1,5 @@
+import type { OrderReview } from "./review-types";
+
 export type CartItemView = {
   id: string;
   quantity: number;
@@ -59,6 +61,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+
 export type OrderListItem = {
   id: string;
   orderNumber: string;
@@ -74,6 +77,10 @@ export type OrderListItem = {
   createdAt: string;
   vendor: { id: string; name: string; slug: string };
   itemCount: number;
+  /** Whether a delivery partner was assigned to this order. */
+  hasRider: boolean;
+  /** Present only when the customer has already reviewed this delivered order. */
+  review?: OrderReview | null;
 };
 
 export type OrderItem = {

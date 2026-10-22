@@ -14,6 +14,7 @@ const LINKS: [string, string][] = [
   ["Riders", "/admin/riders"],
   ["Customers", "/admin/customers"],
   ["Orders", "/admin/orders"],
+  ["Reviews", "/admin/reviews"],
   ["Products", "/admin/products"],
   ["Payouts", "/admin/payouts"],
   ["Affiliates", "/admin/affiliates"],

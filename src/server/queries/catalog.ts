@@ -350,8 +350,8 @@ function mapVendor(row: VendorRow): CatalogVendor {
 }
 
 const VENDOR_SORT_SQL: Record<VendorSort, string> = {
-  rating: "v.rating_average DESC, v.rating_count DESC",
-  popular: "v.rating_count DESC, v.rating_average DESC",
+  rating: "rating_average DESC, rating_count DESC",
+  popular: "rating_count DESC, rating_average DESC",
   name: "v.business_name ASC",
 };
 
@@ -367,7 +367,12 @@ export async function listVendors(input: ListVendorsInput = {}): Promise<Paginat
     conditions.push(sql`(v.business_name ILIKE ${term} OR v.description ILIKE ${term})`);
   }
   if (input.category) conditions.push(sql`c.slug = ${input.category}`);
-  if (input.minRating != null) conditions.push(sql`v.rating_average >= ${input.minRating}`);
+  if (input.minRating != null) {
+    conditions.push(sql`COALESCE((
+      SELECT AVG(r.vendor_rating) FROM order_reviews r
+      WHERE r.vendor_id = v.id AND r.is_hidden = FALSE
+    ), 0) >= ${input.minRating}`);
+  }
 
   const where = conditions.reduce((acc, condition) => sql`${acc} AND ${condition}`);
   const orderBy = VENDOR_SORT_SQL[input.sort ?? "rating"] ?? VENDOR_SORT_SQL.rating;
@@ -375,7 +380,15 @@ export async function listVendors(input: ListVendorsInput = {}): Promise<Paginat
   const rows = await sql<VendorRow[]>`
     SELECT
       v.id, v.slug, v.business_name, v.owner_name, v.description, v.city, v.state, v.address,
-      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured, v.is_open,
+      v.logo_url, v.banner_image_url, v.is_featured, v.is_open,
+      COALESCE((
+        SELECT ROUND(AVG(r.vendor_rating)::numeric, 2) FROM order_reviews r
+        WHERE r.vendor_id = v.id AND r.is_hidden = FALSE
+      ), 0) AS rating_average,
+      (
+        SELECT COUNT(*) FROM order_reviews r
+        WHERE r.vendor_id = v.id AND r.is_hidden = FALSE
+      ) AS rating_count,
       COALESCE(array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL), '{}') AS categories,
       COUNT(*) OVER() AS total_count
     FROM vendors v
@@ -396,7 +409,15 @@ export async function getVendorBySlug(slug: string): Promise<CatalogVendor | nul
   const rows = await sql<VendorRow[]>`
     SELECT
       v.id, v.slug, v.business_name, v.owner_name, v.description, v.city, v.state, v.address,
-      v.logo_url, v.banner_image_url, v.rating_average, v.rating_count, v.is_featured, v.is_open,
+      v.logo_url, v.banner_image_url, v.is_featured, v.is_open,
+      COALESCE((
+        SELECT ROUND(AVG(r.vendor_rating)::numeric, 2) FROM order_reviews r
+        WHERE r.vendor_id = v.id AND r.is_hidden = FALSE
+      ), 0) AS rating_average,
+      (
+        SELECT COUNT(*) FROM order_reviews r
+        WHERE r.vendor_id = v.id AND r.is_hidden = FALSE
+      ) AS rating_count,
       COALESCE(array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL), '{}') AS categories
     FROM vendors v
     LEFT JOIN vendor_categories vc ON vc.vendor_id = v.id

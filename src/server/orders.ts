@@ -917,6 +917,16 @@ type OrderRow = {
   address_state: string | null;
   recipient_name: string | null;
   phone: string | null;
+  has_rider: boolean;
+  review_id: string | null;
+  review_customer_id: string | null;
+  review_rider_id: string | null;
+  review_vendor_rating: number | null;
+  review_vendor_comment: string | null;
+  review_rider_rating: number | null;
+  review_rider_comment: string | null;
+  review_is_hidden: boolean | null;
+  review_created_at: Date | null;
 };
 
 const ORDER_SELECT = `
@@ -931,10 +941,18 @@ const ORDER_SELECT = `
     v.business_name, v.slug AS vendor_slug,
     (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id)::text AS item_count,
     COUNT(*) OVER()::text AS total_count,
-    a.full_address, a.city AS address_city, a.state AS address_state, a.recipient_name, a.phone
+    a.full_address, a.city AS address_city, a.state AS address_state, a.recipient_name, a.phone,
+    (o.delivery_partner_id IS NOT NULL OR EXISTS (
+      SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.delivery_partner_id IS NOT NULL
+    )) AS has_rider,
+    rv.id AS review_id, rv.customer_id AS review_customer_id, rv.rider_id AS review_rider_id,
+    rv.vendor_rating AS review_vendor_rating, rv.vendor_comment AS review_vendor_comment,
+    rv.rider_rating AS review_rider_rating, rv.rider_comment AS review_rider_comment,
+    rv.is_hidden AS review_is_hidden, rv.created_at AS review_created_at
   FROM orders o
   JOIN vendors v ON v.id = o.vendor_id
   LEFT JOIN addresses a ON a.id = o.address_id
+  LEFT JOIN order_reviews rv ON rv.order_id = o.id
 `;
 
 function toListItem(row: OrderRow): OrderListItem {
@@ -953,6 +971,25 @@ function toListItem(row: OrderRow): OrderListItem {
     createdAt: row.created_at.toISOString(),
     vendor: { id: row.vendor_id, name: row.business_name, slug: row.vendor_slug },
     itemCount: Number(row.item_count),
+    hasRider: Boolean(row.has_rider),
+    review: row.review_id
+      ? {
+          id: row.review_id,
+          orderId: row.id,
+          customerId: row.review_customer_id ?? "",
+          vendorId: row.vendor_id,
+          riderId: row.review_rider_id,
+          vendorRating: row.review_vendor_rating ?? 0,
+          vendorComment: row.review_vendor_comment,
+          riderRating: row.review_rider_rating,
+          riderComment: row.review_rider_comment,
+          isHidden: row.review_is_hidden ?? false,
+          createdAt:
+            row.review_created_at instanceof Date
+              ? row.review_created_at.toISOString()
+              : String(row.review_created_at),
+        }
+      : null,
   };
   return ordersBase;
 }
